@@ -1,0 +1,66 @@
+# Gradle files
+.gradle/
+build/
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Android Studio
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+local.properties
+capture_cache/
+lint_results/
+
+# Build outputs
+bin/
+out/
+
+# Firebase config (NEVER commit credentials!)
+google-services.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+*.swp
+*.swo
+*~
+.classpath
+.project
+.settings/
+
+# Kotlin
+*.kt.bak
+
+# JVM
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Virtual machines
+.vm/
+*.vm
+
+# Gradle Wrapper (optional, include in most projects)
+# !gradle/wrapper/gradle-wrapper.jar
+# !gradle/wrapper/gradle-wrapper.properties
+
+# Environment variables
+.env
+.env.local
+app/google-services.json
+
+# El wrapper de Gradle SÍ se versiona (lo necesita gradlew en Windows)
+!gradle/wrapper/gradle-wrapper.jar

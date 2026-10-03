@@ -518,18 +518,18 @@ fun validateAISummary(summary: AISummary, events: List<MatchEvent>): ValidationR
 
 ### 6.1 Datos Sensibles No Enviados a IA
 
-- ❌ Datos físicos (altura, peso)
-- ❌ Información de contacto (teléfono, email)
-- ❌ Contacto de emergencia
-- ❌ Datos de pago / mensualidades
-- ❌ Ubicación geográfica del hogar
+-Datos físicos (altura, peso)
+-Información de contacto (teléfono, email)
+-Contacto de emergencia
+-Datos de pago / mensualidades
+-Ubicación geográfica del hogar
 
 ### 6.2 Datos Permitidos
 
-- ✓ Nombre del jugador (o dorsal si se prefiere)
-- ✓ Número de dorsal
-- ✓ Posición en el equipo
-- ✓ Eventos deportivos (goles, tarjetas, cambios)
+- Nombre del jugador (o dorsal si se prefiere)
+- Número de dorsal
+- Posición en el equipo
+- Eventos deportivos (goles, tarjetas, cambios)
 
 ### 6.3 Cumplimiento Normativo
 

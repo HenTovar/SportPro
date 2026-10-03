@@ -18,6 +18,22 @@ service cloud.firestore {
     function staff() {
       return activeUser() && profile().role in ['ADMIN', 'ENTRENADOR'];
     }
+    function mayApprove(target) {
+      return creator() || (activeUser() &&
+        ((target in ['JUGADOR', 'PADRE'] && profile().role in ['ENTRENADOR', 'ADMIN'])
+          || (target == 'ENTRENADOR' && profile().role == 'ADMIN')));
+    }
+    function validRequest(uid) {
+      return request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'fromRole', 'toRole', 'status', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.fromRole == get(/databases/$(database)/documents/users/$(uid)).data.role
+        && request.resource.data.toRole in ['JUGADOR', 'PADRE', 'ENTRENADOR', 'ADMIN']
+        && request.resource.data.toRole != request.resource.data.fromRole
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.createdAt == request.time;
+    }
     function restricted() {
       return activeUser() && profile().role in ['JUGADOR', 'PADRE'];
     }
@@ -46,11 +62,13 @@ service cloud.firestore {
         && request.resource.data.get('active', true) == true
         && request.resource.data.get('isActive', true) == true;
       // Sólo el creador verificado aprueba solicitudes ajenas mediante escritura atómica.
-      allow update: if (creator() && request.auth.uid != uid
+      allow update: if (signedIn() && request.auth.uid != uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
-        && request.resource.data.role == 'ADMIN'
-        && get(/databases/$(database)/documents/adminRequests/$(uid)).data.status == 'PENDING'
-        && getAfter(/databases/$(database)/documents/adminRequests/$(uid)).data.status == 'APPROVED')
+        && mayApprove(request.resource.data.role)
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'PENDING'
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.fromRole == resource.data.role
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.toRole == request.resource.data.role
+        && getAfter(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'APPROVED')
         || staff()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId', 'playerId'])
         && request.resource.data.teamId is string
@@ -58,21 +76,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /adminRequests/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid
-        && exists(/databases/$(database)/documents/users/$(uid))
-        && request.resource.data.keys().hasOnly(['uid', 'email', 'createdAt', 'status'])
-        && request.resource.data.uid == uid
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.status == 'PENDING';
-      allow read: if creator();
-      allow update: if creator() && request.auth.uid != uid
-        && resource.data.status == 'PENDING'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && (request.resource.data.status == 'REJECTED'
-          || (request.resource.data.status == 'APPROVED'
-            && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == 'ADMIN'));
+    match /roleRequests/{uid} {
+      allow create: if signedIn() && validRequest(uid);
+      // Query by allowed toRole: rules never return requests above the approver.
+      allow read: if mayApprove(resource.data.toRole);
+      allow update: if signedIn() && (
+        (resource.data.status in ['APPROVED', 'REJECTED'] && validRequest(uid))
+        || (request.auth.uid != uid && mayApprove(resource.data.toRole)
+          && resource.data.status == 'PENDING'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && (request.resource.data.status == 'REJECTED'
+            || (request.resource.data.status == 'APPROVED'
+              && get(/databases/$(database)/documents/users/$(uid)).data.role == resource.data.fromRole
+              && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == resource.data.toRole))));
       allow delete: if false;
     }
 

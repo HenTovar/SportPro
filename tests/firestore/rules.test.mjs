@@ -95,45 +95,65 @@ test('staff queries work without active filters; inactive and anonymous users fa
 });
 
 
-test('admin requests require creator verified claims and atomic approval', async () => {
-  const applicant = env.authenticatedContext('unassigned', { email: 'person@example.test', email_verified: true }).firestore();
+test('role approval matrix is enforced by Firestore with atomic writes', async () => {
+  const actors = [
+    ['coach', ['JUGADOR', 'PADRE']],
+    ['admin', ['JUGADOR', 'PADRE', 'ENTRENADOR']],
+    ['player', []], ['parent', []],
+    ['henry', ['JUGADOR', 'PADRE', 'ENTRENADOR', 'ADMIN']]
+  ];
+  const claims = uid => uid === 'henry' ? { email: 'harontovar@gmail.com', email_verified: true } : { email: `${uid}@example.test`, email_verified: true };
+  for (const [actor, allowed] of actors) {
+    const client = env.authenticatedContext(actor, claims(actor)).firestore();
+    for (const toRole of ['JUGADOR', 'PADRE', 'ENTRENADOR', 'ADMIN']) {
+      const uid = `req-${actor}-${toRole}`;
+      const fromRole = toRole === 'JUGADOR' ? 'PADRE' : 'JUGADOR';
+      await env.withSecurityRulesDisabled(async c => setDoc(doc(c.firestore(), 'users', uid), profile(uid, fromRole)));
+      const owner = env.authenticatedContext(uid, { email: `${uid}@example.test` }).firestore();
+      const request = { uid, email: `${uid}@example.test`, fromRole, toRole, status: 'PENDING', createdAt: serverTimestamp() };
+      await assertSucceeds(setDoc(doc(owner, 'roleRequests', uid), request));
+      await assertFails(updateDoc(doc(owner, 'users', uid), { role: toRole }));
+      await assertFails(updateDoc(doc(client, 'users', uid), { role: toRole }));
+      await assertFails(updateDoc(doc(client, 'roleRequests', uid), { status: 'APPROVED' }));
+      const batch = writeBatch(client);
+      batch.update(doc(client, 'users', uid), { role: toRole });
+      batch.update(doc(client, 'roleRequests', uid), { status: 'APPROVED' });
+      if (allowed.includes(toRole)) {
+        await assertSucceeds(batch.commit());
+        if ((await getDoc(doc(owner, 'users', uid))).data().role !== toRole) throw new Error('wrong approved role');
+      } else await assertFails(batch.commit());
+    }
+    if (allowed.length) await assertSucceeds(getDocs(query(collection(client, 'roleRequests'), where('toRole', 'in', allowed))));
+    if (actor !== 'henry') await assertFails(getDocs(collection(client, 'roleRequests')));
+  }
+});
+
+test('role requests reject stale source roles, self approval, forged claims and preserve rejection', async () => {
+  const owner = env.authenticatedContext('unassigned', { email: 'u@example.test' }).firestore();
   const creator = env.authenticatedContext('henry', { email: 'harontovar@gmail.com', email_verified: true }).firestore();
   const unverified = env.authenticatedContext('henry', { email: 'harontovar@gmail.com', email_verified: false }).firestore();
-  const impostor = env.authenticatedContext('impostor', { email: 'other@example.test', email_verified: true }).firestore();
-  const data = { uid: 'unassigned', email: 'person@example.test', createdAt: serverTimestamp(), status: 'PENDING' };
-  await assertFails(setDoc(doc(applicant, 'adminRequests/player'), data));
-  await assertFails(setDoc(doc(applicant, 'adminRequests/unassigned'), { ...data, status: 'APPROVED' }));
-  await assertFails(setDoc(doc(applicant, 'adminRequests/unassigned'), { ...data, email: 'forged@example.test' }));
-  await assertSucceeds(setDoc(doc(applicant, 'adminRequests/unassigned'), data));
-  for (const client of [applicant, db('admin'), unverified, impostor]) {
-    await assertFails(getDocs(collection(client, 'adminRequests')));
-    await assertFails(updateDoc(doc(client, 'users/unassigned'), { role: 'ADMIN' }));
-    await assertFails(updateDoc(doc(client, 'adminRequests/unassigned'), { status: 'APPROVED' }));
-  }
-  await assertSucceeds(setDoc(doc(creator, 'adminRequests/henry'), { uid: 'henry', email: 'harontovar@gmail.com', createdAt: serverTimestamp(), status: 'PENDING' }));
-  const self = writeBatch(creator);
-  self.update(doc(creator, 'users/henry'), { role: 'ADMIN' });
-  self.update(doc(creator, 'adminRequests/henry'), { status: 'APPROVED' });
-  await assertFails(self.commit());
+  const request = { uid: 'unassigned', email: 'u@example.test', fromRole: 'JUGADOR', toRole: 'ADMIN', status: 'PENDING', createdAt: serverTimestamp() };
+  await assertFails(setDoc(doc(owner, 'roleRequests/player'), request));
+  await assertFails(setDoc(doc(owner, 'roleRequests/unassigned'), { ...request, fromRole: 'ADMIN' }));
+  await assertFails(setDoc(doc(owner, 'roleRequests/unassigned'), { ...request, email: 'forged@example.test' }));
+  await assertSucceeds(setDoc(doc(owner, 'roleRequests/unassigned'), request));
+  await assertFails(setDoc(doc(owner, 'roleRequests/unassigned'), { ...request, toRole: 'ENTRENADOR' }));
+  await assertFails(getDocs(collection(unverified, 'roleRequests')));
   const spoof = writeBatch(unverified);
   spoof.update(doc(unverified, 'users/unassigned'), { role: 'ADMIN' });
-  spoof.update(doc(unverified, 'adminRequests/unassigned'), { status: 'APPROVED' });
+  spoof.update(doc(unverified, 'roleRequests/unassigned'), { status: 'APPROVED' });
   await assertFails(spoof.commit());
-  await assertSucceeds(getDocs(collection(creator, 'adminRequests')));
-  await assertFails(updateDoc(doc(creator, 'users/unassigned'), { role: 'ADMIN' }));
-  await assertFails(updateDoc(doc(creator, 'adminRequests/unassigned'), { status: 'APPROVED' }));
-  const batch = writeBatch(creator);
-  batch.update(doc(creator, 'users/unassigned'), { role: 'ADMIN' });
-  batch.update(doc(creator, 'adminRequests/unassigned'), { status: 'APPROVED' });
-  await assertSucceeds(batch.commit());
-  const result = await getDoc(doc(applicant, 'users/unassigned'));
-  if (result.data().role !== 'ADMIN') throw new Error('approval did not change role');
-  await assertFails(setDoc(doc(applicant, 'adminRequests/unassigned'), data));
-  await assertFails(updateDoc(doc(creator, 'adminRequests/unassigned'), { status: 'REJECTED' }));
-
-  const rejected = env.authenticatedContext('player', { email: 'player@example.test' }).firestore();
-  await assertSucceeds(setDoc(doc(rejected, 'adminRequests/player'), { uid: 'player', email: 'player@example.test', createdAt: serverTimestamp(), status: 'PENDING' }));
-  await assertSucceeds(updateDoc(doc(creator, 'adminRequests/player'), { status: 'REJECTED' }));
-  if ((await getDoc(doc(rejected, 'users/player'))).data().role !== 'JUGADOR') throw new Error('rejection changed role');
-  await assertFails(updateDoc(doc(creator, 'users/player'), { role: 'ADMIN' }));
+  await assertSucceeds(updateDoc(doc(creator, 'roleRequests/unassigned'), { status: 'REJECTED' }));
+  if ((await getDoc(doc(owner, 'users/unassigned'))).data().role !== 'JUGADOR') throw new Error('rejection changed role');
+  await assertSucceeds(setDoc(doc(owner, 'roleRequests/unassigned'), request));
+  await env.withSecurityRulesDisabled(async c => updateDoc(doc(c.firestore(), 'users/unassigned'), { role: 'PADRE' }));
+  const stale = writeBatch(creator);
+  stale.update(doc(creator, 'users/unassigned'), { role: 'ADMIN' });
+  stale.update(doc(creator, 'roleRequests/unassigned'), { status: 'APPROVED' });
+  await assertFails(stale.commit());
+  await assertSucceeds(setDoc(doc(creator, 'roleRequests/henry'), { uid: 'henry', email: 'harontovar@gmail.com', fromRole: 'JUGADOR', toRole: 'ADMIN', status: 'PENDING', createdAt: serverTimestamp() }));
+  const self = writeBatch(creator);
+  self.update(doc(creator, 'users/henry'), { role: 'ADMIN' });
+  self.update(doc(creator, 'roleRequests/henry'), { status: 'APPROVED' });
+  await assertFails(self.commit());
 });

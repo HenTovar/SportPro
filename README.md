@@ -110,42 +110,42 @@ SportPro/
 ## Funcionalidades Principales (Entregable 2)
 
 ### Autenticación
-- ✅ Registro de usuarios con roles (Admin, Entrenador, Jugador, Padre)
-- ✅ Inicio de sesión con email y contraseña
-- ✅ Cierre de sesión
-- ✅ Validación de email y contraseña
+-  Registro de usuarios con roles (Admin, Entrenador, Jugador, Padre)
+-  Inicio de sesión con email y contraseña
+-  Cierre de sesión
+-  Validación de email y contraseña
 
 ### Gestión de Equipos
-- ✅ Listar equipos por categoría (Sub-10, Sub-15, Primera, etc.)
-- ✅ Crear nuevos equipos
-- ✅ Editar equipos (acceso limitado a administradores)
-- ✅ Eliminar equipos
+-  Listar equipos por categoría (Sub-10, Sub-15, Primera, etc.)
+-  Crear nuevos equipos
+-  Editar equipos (acceso limitado a administradores)
+-  Eliminar equipos
 
 ### Gestión de Jugadores
-- ✅ Listar jugadores por equipo
-- ✅ Crear perfil de jugador (nombre, posición, datos físicos, contacto)
-- ✅ Editar datos del jugador
-- ✅ Subir foto del jugador (Cloud Storage)
-- ✅ Vista limitada para jugadores/padres (sin acceso a datos de otros)
+-  Listar jugadores por equipo
+-  Crear perfil de jugador (nombre, posición, datos físicos, contacto)
+-  Editar datos del jugador
+-  Subir foto del jugador (Cloud Storage)
+-  Vista limitada para jugadores/padres (sin acceso a datos de otros)
 
 ### Entrenamientos
-- ✅ Crear sesiones de entrenamiento (equipo, fecha, objetivo, duración)
-- ✅ Biblioteca reutilizable de ejercicios
-- ✅ Listar entrenamientos
+-  Crear sesiones de entrenamiento (equipo, fecha, objetivo, duración)
+-  Biblioteca reutilizable de ejercicios
+-  Listar entrenamientos
 
 ### Asistencia
-- ✅ Registrar asistencia a entrenamientos
-- ✅ Historial de asistencia por jugador
-- ✅ Cálculo de porcentaje de asistencia
+-  Registrar asistencia a entrenamientos
+-  Historial de asistencia por jugador
+-  Cálculo de porcentaje de asistencia
 
 ### Arquitectura
-- ✅ MVVM con ViewModel y StateFlow
-- ✅ Navigation Compose
-- ✅ Material 3 Design
-- ✅ Firebase Authentication
-- ✅ Firestore Database
-- ✅ Cloud Storage
-- ✅ Inyección de dependencias manual (AppContainer)
+-  MVVM con ViewModel y StateFlow
+-  Navigation Compose
+-  Material 3 Design
+-  Firebase Authentication
+-  Firestore Database
+-  Cloud Storage
+-  Inyección de dependencias manual (AppContainer)
 
 ## Pruebas Unitarias
 

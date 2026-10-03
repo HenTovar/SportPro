@@ -1,0 +1,61 @@
+/**
+ * Reglas de seguridad de Cloud Storage para SportPro.
+ *
+ * Estructura de almacenamiento:
+ * - players/{teamId}/{playerId}/photo.jpg: Fotos de jugadores
+ * - users/{uid}/profile.jpg: Fotos de perfil
+ * - matches/{matchId}/summary.json: Resúmenes narrativos
+ */
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Fotos de jugadores
+    match /players/{teamId}/{playerId}/{allPaths=**} {
+      // Lectura: Admin, entrenador del equipo, el jugador, padres autorizados
+      allow read: if request.auth != null &&
+                     (request.auth.token.isAdmin == true ||
+                      request.auth.uid == resource.metadata.customMetadata.ownerId ||
+                      request.auth.uid == resource.metadata.customMetadata.trainerId);
+
+      // Escritura: Admin, entrenador, el mismo jugador
+      allow write: if request.auth != null &&
+                      (request.auth.token.isAdmin == true ||
+                       request.auth.uid == request.resource.metadata.customMetadata.trainerId ||
+                       request.auth.uid == request.resource.metadata.customMetadata.playerId) &&
+                      request.resource.size < 5 * 1024 * 1024 && // Máximo 5MB
+                      request.resource.contentType.matches('image/.*');
+    }
+
+    // Fotos de perfil
+    match /users/{uid}/{allPaths=**} {
+      // Lectura: El mismo usuario y admins
+      allow read: if request.auth.uid == uid ||
+                     request.auth.token.isAdmin == true;
+
+      // Escritura: El mismo usuario
+      allow write: if request.auth.uid == uid &&
+                      request.resource.size < 5 * 1024 * 1024 && // Máximo 5MB
+                      request.resource.contentType.matches('image/.*');
+    }
+
+    // Resúmenes de partidos
+    match /matches/{matchId}/{allPaths=**} {
+      // Lectura: Usuarios autenticados
+      allow read: if request.auth != null;
+
+      // Escritura: Admin y entrenadores autenticados
+      allow write: if request.auth != null &&
+                      (request.auth.token.isAdmin == true ||
+                       request.auth.token.role == 'ENTRENADOR') &&
+                      request.resource.size < 10 * 1024 * 1024; // Máximo 10MB
+    }
+
+    // Deny all by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

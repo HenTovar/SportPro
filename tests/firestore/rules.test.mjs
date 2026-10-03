@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where, serverTimestamp, writeBatch } from 'firebase/firestore';
 
 let env;
 const profile = (uid, role, extra = {}) => ({ uid, role, name: uid, email: `${uid}@example.test`, active: true, teamId: '', playerId: '', ...extra });
@@ -14,6 +14,7 @@ before(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async context => {
     const seed = {
+      'users/henry': profile('henry', 'JUGADOR'),
       'users/admin': profile('admin', 'ADMIN'),
       'users/coach': profile('coach', 'ENTRENADOR'),
       'users/player': profile('player', 'JUGADOR', { teamId: 'a', playerId: 'one' }),
@@ -91,4 +92,48 @@ test('staff queries work without active filters; inactive and anonymous users fa
   await assertFails(getDocs(collection(db('inactive'), 'teams')));
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'teams/a')));
   await assertFails(getDoc(doc(db('missing-profile'), 'teams/a')));
+});
+
+
+test('admin requests require creator verified claims and atomic approval', async () => {
+  const applicant = env.authenticatedContext('unassigned', { email: 'person@example.test', email_verified: true }).firestore();
+  const creator = env.authenticatedContext('henry', { email: 'harontovar@gmail.com', email_verified: true }).firestore();
+  const unverified = env.authenticatedContext('henry', { email: 'harontovar@gmail.com', email_verified: false }).firestore();
+  const impostor = env.authenticatedContext('impostor', { email: 'other@example.test', email_verified: true }).firestore();
+  const data = { uid: 'unassigned', email: 'person@example.test', createdAt: serverTimestamp(), status: 'PENDING' };
+  await assertFails(setDoc(doc(applicant, 'adminRequests/player'), data));
+  await assertFails(setDoc(doc(applicant, 'adminRequests/unassigned'), { ...data, status: 'APPROVED' }));
+  await assertFails(setDoc(doc(applicant, 'adminRequests/unassigned'), { ...data, email: 'forged@example.test' }));
+  await assertSucceeds(setDoc(doc(applicant, 'adminRequests/unassigned'), data));
+  for (const client of [applicant, db('admin'), unverified, impostor]) {
+    await assertFails(getDocs(collection(client, 'adminRequests')));
+    await assertFails(updateDoc(doc(client, 'users/unassigned'), { role: 'ADMIN' }));
+    await assertFails(updateDoc(doc(client, 'adminRequests/unassigned'), { status: 'APPROVED' }));
+  }
+  await assertSucceeds(setDoc(doc(creator, 'adminRequests/henry'), { uid: 'henry', email: 'harontovar@gmail.com', createdAt: serverTimestamp(), status: 'PENDING' }));
+  const self = writeBatch(creator);
+  self.update(doc(creator, 'users/henry'), { role: 'ADMIN' });
+  self.update(doc(creator, 'adminRequests/henry'), { status: 'APPROVED' });
+  await assertFails(self.commit());
+  const spoof = writeBatch(unverified);
+  spoof.update(doc(unverified, 'users/unassigned'), { role: 'ADMIN' });
+  spoof.update(doc(unverified, 'adminRequests/unassigned'), { status: 'APPROVED' });
+  await assertFails(spoof.commit());
+  await assertSucceeds(getDocs(collection(creator, 'adminRequests')));
+  await assertFails(updateDoc(doc(creator, 'users/unassigned'), { role: 'ADMIN' }));
+  await assertFails(updateDoc(doc(creator, 'adminRequests/unassigned'), { status: 'APPROVED' }));
+  const batch = writeBatch(creator);
+  batch.update(doc(creator, 'users/unassigned'), { role: 'ADMIN' });
+  batch.update(doc(creator, 'adminRequests/unassigned'), { status: 'APPROVED' });
+  await assertSucceeds(batch.commit());
+  const result = await getDoc(doc(applicant, 'users/unassigned'));
+  if (result.data().role !== 'ADMIN') throw new Error('approval did not change role');
+  await assertFails(setDoc(doc(applicant, 'adminRequests/unassigned'), data));
+  await assertFails(updateDoc(doc(creator, 'adminRequests/unassigned'), { status: 'REJECTED' }));
+
+  const rejected = env.authenticatedContext('player', { email: 'player@example.test' }).firestore();
+  await assertSucceeds(setDoc(doc(rejected, 'adminRequests/player'), { uid: 'player', email: 'player@example.test', createdAt: serverTimestamp(), status: 'PENDING' }));
+  await assertSucceeds(updateDoc(doc(creator, 'adminRequests/player'), { status: 'REJECTED' }));
+  if ((await getDoc(doc(rejected, 'users/player'))).data().role !== 'JUGADOR') throw new Error('rejection changed role');
+  await assertFails(updateDoc(doc(creator, 'users/player'), { role: 'ADMIN' }));
 });

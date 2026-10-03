@@ -32,7 +32,7 @@ fun HomeScreen(navController: NavHostController) {
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("SportPro", style = MaterialTheme.typography.headlineLarge)
         Text("Bienvenido, ${user?.name.orEmpty()}")
-        Text("Rol: ${RolePolicy.label(user?.role)}", style = MaterialTheme.typography.titleMedium)
+        Text("Rol: ${if (isCreator(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser)) "Creador" else RolePolicy.label(user?.role)}", style = MaterialTheme.typography.titleMedium)
         if (loading) CircularProgressIndicator()
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         val profile = user
@@ -54,6 +54,7 @@ fun HomeScreen(navController: NavHostController) {
                 if (!staff) OutlinedButton(onClick = { navController.navigate("attendanceHistory/$team/${Uri.encode(profile.playerId)}") }, modifier = Modifier.fillMaxWidth()) { Text("Calendario de asistencia") }
             }
         }
+        Button(onClick = { navController.navigate("profile") }) { Text("Perfil") }
         OutlinedButton(onClick = {
             container.authRepository.logout()
             navController.navigate("login") { popUpTo("home") { inclusive = true } }

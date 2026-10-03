@@ -4,7 +4,7 @@ Base: `bf79ef3` (`gh/main`), rama `feat/correcciones-julia`. Copia propia de ALI
 
 ## Cambios por punto
 
-1. Registro: sólo Entrenador, Jugador y Padre. ADMIN se asigna desde consola/Admin SDK; repositorio y reglas rechazan autoasignación y cambios de rol desde clientes.
+1. Registro: sólo Entrenador, Jugador y Padre. ADMIN se concede por aprobación del Creador (punto 11); repositorio y reglas rechazan autoasignación y cambios de rol sin aprobación.
 2. Edición: equipos, jugadores y entrenamientos tienen entrada Editar, cargan el documento y esperan la escritura antes de volver. Actualizaciones parciales conservan campos no editados. IDs obtenidos del documento.
 3. Asistencia: carga registros previos, conserva notas/estados, guarda únicamente cambios y reutiliza IDs antiguos; nuevas parejas entrenamiento/jugador reciben un ID estable. Un error de lectura impide guardar; un error de escritura conserva pendientes.
 4. Jugador: consulta sólo su equipo y su ficha; reglas impiden consultas globales y datos ajenos.
@@ -15,10 +15,12 @@ Base: `bf79ef3` (`gh/main`), rama `feat/correcciones-julia`. Copia propia de ALI
 9. Rol visible en Home. Jugador/padre pueden copiar su código de cuenta para entregarlo al entrenador.
 10. Jugador no tiene controles de edición; Firestore rechaza escrituras sobre ficha y asistencia.
 
+11. Perfil incorpora «Solicitar rol de admin». Crea `adminRequests/{uid}` PENDING con timestamp del servidor; nunca cambia el rol. Sólo la sesión Firebase Auth con email `harontovar@gmail.com` **verificado** ve «Creador» y la pantalla de solicitudes. Aprobar cambia rol y estado juntos; rechazar no cambia el rol. Reglas exigen ambos cambios atómicos y prohíben autoaprobación, alteración del solicitante y reapertura. Una solicitud por cuenta; el solicitante no puede leerla ni reemplazarla, según el contrato solicitado.
+
 ## Validación
 
 - `:app:assembleDebug :app:testDebugUnitTest`: BUILD SUCCESSFUL; 73 pruebas, 0 fallos, 0 errores, 0 omitidas (incluye 9 nuevas de roles/registro/asistencia).
-- Firestore Emulator, proyecto local `demo-sportpro`: 4 pruebas agrupadas; registro, escalada, vinculación, lectura propia/ajena, consultas y escritura. Sin credenciales productivas ni despliegue.
+- Firestore Emulator, proyecto local `demo-sportpro`: 5 pruebas agrupadas; registro, escalada, vinculación, lectura propia/ajena, consultas y escritura. Sin credenciales productivas ni despliegue.
 - `git diff --check` limpio.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Las pruebas unitarias usan dobles de Firebase; las reglas se ejecutan realmente en emulador. No se ejecutó la app en un dispositivo/emulador Android ni contra los datos de producción.
@@ -33,6 +35,14 @@ Base: `bf79ef3` (`gh/main`), rama `feat/correcciones-julia`. Copia propia de ALI
 6. Revisar calendario cambiando mes; fechas corresponden a entrenamientos, no al día de edición de la asistencia.
 7. Partidos consumen el esquema documentado `matches`: `teamA`/`teamB` con IDs de equipos, `date` Timestamp o milisegundos, `name`, `status`. No se añadió creación de partidos. Datos con otro esquema requieren adaptación explícita.
 8. Probar pantallas en móvil pequeño y volver/rotar durante edición. El padding seguro global existente se conserva. Sincronización concurrente de ediciones de la misma marca sigue la última escritura; no se implementó historial de auditoría.
+
+## Prueba adicional del punto 11
+
+- Registrar/iniciar Henry con `harontovar@gmail.com`, verificar correo y actualizar token (Perfil incluye enviar verificación y «Ya verifiqué mi correo»). Un email sin verificar no habilita Creador. El email del documento Firestore no concede privilegios.
+- Con otra cuenta, Perfil → Solicitar rol de admin: el rol permanece igual. Con Henry, abrir Solicitudes de admin y aprobar; volver a iniciar sesión del solicitante para recargar el perfil ADMIN.
+- Repetir con otra cuenta y rechazar: su rol permanece igual. Intentar aprobar con email no verificado o como otro ADMIN: denegado.
+- Creador es una capacidad de Auth, no un nuevo valor del enum de rol ni autoasignación ADMIN. El creador no se aprueba a sí mismo. La regla es exclusiva para aprobaciones ajenas.
+- La ampliación reemplaza la instrucción anterior de asignar ADMIN a mano. No se desplegaron reglas ni se modificaron cuentas productivas.
 
 ## Reproducción de reglas
 

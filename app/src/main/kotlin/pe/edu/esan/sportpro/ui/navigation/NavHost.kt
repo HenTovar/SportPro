@@ -44,6 +44,12 @@ fun SportProNavHost(
             HomeScreen(navController = navController)
         }
 
+        composable("profile") {
+            pe.edu.esan.sportpro.ui.screens.home.AdminProfileScreen(navController)
+        }
+        composable("adminRequests") {
+            pe.edu.esan.sportpro.ui.screens.home.AdminRequestsScreen(navController)
+        }
         // Equipos
         composable("teams?pick={pick}", arguments = listOf(navArgument("pick") { defaultValue = "" })) { entry ->
             TeamsScreen(

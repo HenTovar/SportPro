@@ -7,6 +7,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
     function signedIn() { return request.auth != null; }
+    function creator() {
+      return signedIn() && request.auth.token.email == 'harontovar@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
     function activeUser() {
       // Kotlin serializa isActive como active. Un active=false prevalece sobre legado.
       return signedIn() && profile().get('active', profile().get('isActive', false)) == true;
@@ -41,12 +45,34 @@ service cloud.firestore {
         && request.resource.data.get('playerId', '') == ''
         && request.resource.data.get('active', true) == true
         && request.resource.data.get('isActive', true) == true;
-      // Ningún cliente, incluido ADMIN, puede cambiar roles ni eliminar y recrear
-      // un perfil para ascender. ADMIN se provisiona en consola/Admin SDK.
-      allow update: if staff()
+      // Sólo el creador verificado aprueba solicitudes ajenas mediante escritura atómica.
+      allow update: if (creator() && request.auth.uid != uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+        && request.resource.data.role == 'ADMIN'
+        && get(/databases/$(database)/documents/adminRequests/$(uid)).data.status == 'PENDING'
+        && getAfter(/databases/$(database)/documents/adminRequests/$(uid)).data.status == 'APPROVED')
+        || staff()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId', 'playerId'])
         && request.resource.data.teamId is string
         && request.resource.data.playerId is string;
+      allow delete: if false;
+    }
+
+    match /adminRequests/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/users/$(uid))
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'createdAt', 'status'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'PENDING';
+      allow read: if creator();
+      allow update: if creator() && request.auth.uid != uid
+        && resource.data.status == 'PENDING'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && (request.resource.data.status == 'REJECTED'
+          || (request.resource.data.status == 'APPROVED'
+            && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == 'ADMIN'));
       allow delete: if false;
     }
 

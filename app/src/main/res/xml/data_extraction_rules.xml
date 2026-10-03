@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">firebase.google.com</domain>
+        <domain includeSubdomains="true">firebaseio.com</domain>
+    </domain-config>
+</data-extraction-rules>

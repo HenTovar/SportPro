@@ -126,11 +126,13 @@ class TrainingRepository(
                 .document(teamId)
                 .collection("attendance")
                 .whereEqualTo("playerId", playerId)
-                .orderBy("recordedAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .get()
                 .await()
 
-            val records = snapshot.documents.mapNotNull { it.toObject(AttendanceRecord::class.java) }
+            // Orden en la app: where+orderBy en campos distintos exige índice compuesto.
+            val records = snapshot.documents
+                .mapNotNull { it.toObject(AttendanceRecord::class.java) }
+                .sortedByDescending { it.recordedAt }
             emit(Result.Success(records))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al obtener historial de asistencia"))

@@ -48,13 +48,28 @@ fun SportProNavHost(
         composable("teams?pick={pick}", arguments = listOf(navArgument("pick") { defaultValue = "" })) { entry ->
             TeamsScreen(
                 navController = navController,
-                pickTrainings = entry.arguments?.getString("pick") == "trainings"
+                pickTrainings = entry.arguments?.getString("pick") == "trainings",
+                pickMatches = entry.arguments?.getString("pick") == "matches"
             )
         }
         composable("createTeam") {
             CreateTeamScreen(navController = navController)
         }
 
+        composable("editTeam/{teamId}") { entry ->
+            CreateTeamScreen(navController = navController, teamId = entry.arguments?.getString("teamId") ?: "")
+        }
+        composable("editPlayer/{teamId}/{playerId}") { entry ->
+            CreatePlayerScreen(teamId = entry.arguments?.getString("teamId") ?: "", navController = navController,
+                playerId = entry.arguments?.getString("playerId") ?: "")
+        }
+        composable("editTraining/{teamId}/{trainingId}") { entry ->
+            CreateTrainingScreen(teamId = entry.arguments?.getString("teamId") ?: "", navController = navController,
+                trainingId = entry.arguments?.getString("trainingId") ?: "")
+        }
+        composable("matches/{teamId}") { entry ->
+            pe.edu.esan.sportpro.ui.screens.home.MatchesScreen(entry.arguments?.getString("teamId") ?: "", navController)
+        }
         // Jugadores
         composable("players/{teamId}") { backStackEntry ->
             val teamId = backStackEntry.arguments?.getString("teamId") ?: ""

@@ -27,6 +27,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import kotlinx.coroutines.flow.first
+import pe.edu.esan.sportpro.data.model.RolePolicy
+import pe.edu.esan.sportpro.data.repository.Result
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,7 +62,18 @@ fun PlayersScreen(teamId: String, navController: NavHostController) {
     var estado by remember { mutableStateOf<EstadoLista<Player>>(EstadoLista.Cargando) }
 
     LaunchedEffect(teamId) {
-        container.playerRepository.getPlayersByTeam(teamId).collect { estado = it.aEstadoLista() }
+        val profile = container.authRepository.getCurrentUser().first { it !is Result.Loading }
+        val user = (profile as? Result.Success)?.data
+        if (!RolePolicy.canReadTeam(user, teamId)) estado = EstadoLista.Error("No tienes acceso a este equipo")
+        else if (RolePolicy.isStaff(user?.role)) container.playerRepository.getPlayersByTeam(teamId).collect { estado = it.aEstadoLista() }
+        else if (user!!.playerId.isBlank()) estado = EstadoLista.Datos(emptyList())
+        else container.playerRepository.getPlayerById(teamId, user.playerId).collect { value ->
+            estado = when (value) {
+                is Result.Success -> EstadoLista.Datos(listOf(value.data))
+                is Result.Error -> EstadoLista.Error(value.message)
+                is Result.Loading -> EstadoLista.Cargando
+            }
+        }
     }
 
     Scaffold(
@@ -94,7 +108,10 @@ fun PlayersScreen(teamId: String, navController: NavHostController) {
                 items(jugadores.sortedBy { it.number }) { jugador ->
                     TarjetaJugador(
                         jugador = jugador,
-                        verDatosPrivados = esStaff,
+                        verDatosPrivados = true,
+                        onEditar = if (esStaff) ({ navController.navigate("editPlayer/$teamId/${jugador.id}") }) else null,
+                        onEntrenamientos = { navController.navigate("trainings/$teamId") },
+                        onPartidos = { navController.navigate("matches/$teamId") },
                         onHistorial = { navController.navigate("attendanceHistory/$teamId/${jugador.id}") }
                     )
                 }
@@ -104,7 +121,7 @@ fun PlayersScreen(teamId: String, navController: NavHostController) {
 }
 
 @Composable
-private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistorial: () -> Unit) {
+private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistorial: () -> Unit, onEditar: (() -> Unit)?, onEntrenamientos: () -> Unit, onPartidos: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (jugador.photoUrl.isNullOrBlank()) {
@@ -130,6 +147,9 @@ private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistori
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+                if (onEditar != null) OutlinedButton(onClick = onEditar) { Text("Editar jugador") }
+                OutlinedButton(onClick = onEntrenamientos) { Text("Entrenamientos y horarios") }
+                OutlinedButton(onClick = onPartidos) { Text("Partidos del equipo") }
                 OutlinedButton(onClick = onHistorial, modifier = Modifier.padding(top = 8.dp)) {
                     Text("Historial de asistencia")
                 }

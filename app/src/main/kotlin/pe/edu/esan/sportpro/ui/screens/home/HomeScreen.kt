@@ -1,150 +1,62 @@
 package pe.edu.esan.sportpro.ui.screens.home
 
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import com.google.firebase.auth.FirebaseAuth
-import pe.edu.esan.sportpro.ui.navigation.NavigationRoute
+import pe.edu.esan.sportpro.data.model.*
+import pe.edu.esan.sportpro.data.repository.Result
+import pe.edu.esan.sportpro.di.DefaultAppContainer
 
-/**
- * Pantalla principal de inicio.
- * Muestra opciones de navegación según el rol del usuario.
- */
 @Composable
 fun HomeScreen(navController: NavHostController) {
-    val currentUser = FirebaseAuth.getInstance().currentUser
-
-    // Desplazable: en teléfonos bajos o con teclado abierto el contenido no se corta.
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top
-    ) {
-        Text(
-            "SportPro",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Text(
-            "Bienvenido, ${currentUser?.email}",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Equipos
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .padding(8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        ) {
-            Button(
-                onClick = { navController.navigate(NavigationRoute.TEAMS) },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Text(
-                    "Equipos",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+    val container = remember { DefaultAppContainer() }
+    var user by remember { mutableStateOf<User?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        container.authRepository.getCurrentUser().collect { result ->
+            when (result) {
+                is Result.Success -> { user = result.data; loading = false }
+                is Result.Error -> { error = result.message; loading = false }
+                is Result.Loading -> loading = true
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Entrenamientos
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .padding(8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
-            )
-        ) {
-            Button(
-                onClick = { navController.navigate(NavigationRoute.PICK_TEAM_FOR_TRAININGS) },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            ) {
-                Text(
-                    "Entrenamientos",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("SportPro", style = MaterialTheme.typography.headlineLarge)
+        Text("Bienvenido, ${user?.name.orEmpty()}")
+        Text("Rol: ${RolePolicy.label(user?.role)}", style = MaterialTheme.typography.titleMedium)
+        if (loading) CircularProgressIndicator()
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        val profile = user
+        if (profile != null) {
+            val staff = RolePolicy.isStaff(profile.role)
+            val assigned = profile.teamId.isNotBlank() && profile.playerId.isNotBlank()
+            if (!staff) androidx.compose.foundation.text.selection.SelectionContainer {
+                Text("Código de cuenta para tu entrenador: ${profile.uid}", style = MaterialTheme.typography.bodySmall)
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Partidos (próximamente)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .padding(8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(0.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "Partidos (próximamente)",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Logout
-        Button(
-            onClick = {
-                FirebaseAuth.getInstance().signOut()
-                navController.navigate(NavigationRoute.LOGIN) {
-                    popUpTo(NavigationRoute.HOME) { inclusive = true }
+            if (!staff && !assigned) Text("Tu entrenador debe vincular tu cuenta con tu ficha o la de tu hijo. Todavía no tienes un equipo asignado.")
+            if (staff || assigned) {
+                val team = Uri.encode(profile.teamId)
+                if (!staff) Button(onClick = { navController.navigate("players/$team") }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (profile.role == UserRole.PADRE) "Información de mi hijo" else "Mi información")
                 }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error
-            )
-        ) {
-            Text("Cerrar Sesión", color = MaterialTheme.colorScheme.onError)
+                Button(onClick = { navController.navigate("teams") }, modifier = Modifier.fillMaxWidth()) { Text(if (staff) "Equipos" else "Mi equipo") }
+                Button(onClick = { navController.navigate(if (staff) "teams?pick=trainings" else "trainings/$team") }, modifier = Modifier.fillMaxWidth()) { Text("Entrenamientos y horarios") }
+                Button(onClick = { navController.navigate(if (staff) "teams?pick=matches" else "matches/$team") }, modifier = Modifier.fillMaxWidth()) { Text("Partidos") }
+                if (!staff) OutlinedButton(onClick = { navController.navigate("attendanceHistory/$team/${Uri.encode(profile.playerId)}") }, modifier = Modifier.fillMaxWidth()) { Text("Calendario de asistencia") }
+            }
         }
+        OutlinedButton(onClick = {
+            container.authRepository.logout()
+            navController.navigate("login") { popUpTo("home") { inclusive = true } }
+        }) { Text("Cerrar sesión") }
     }
 }

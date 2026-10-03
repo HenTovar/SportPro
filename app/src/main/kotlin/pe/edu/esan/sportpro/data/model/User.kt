@@ -11,7 +11,9 @@ data class User(
     val role: UserRole = UserRole.JUGADOR,
     val photoUrl: String? = null,
     val createdAt: Long = 0,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val teamId: String = "",
+    val playerId: String = ""
 )
 
 /**

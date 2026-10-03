@@ -26,7 +26,7 @@ class TrainingRepository(
                 .get()
                 .await()
 
-            val trainings = snapshot.documents.mapNotNull { it.toObject(Training::class.java) }
+            val trainings = snapshot.documents.mapNotNull { doc -> doc.toObject(Training::class.java)?.copy(id = doc.id) }
             emit(Result.Success(trainings))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al obtener entrenamientos"))

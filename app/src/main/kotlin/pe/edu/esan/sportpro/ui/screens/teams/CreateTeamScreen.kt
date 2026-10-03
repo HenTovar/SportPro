@@ -92,13 +92,14 @@ fun CreateTeamScreen(navController: NavHostController) {
                     isLoading = true
                     scope.launch {
                         try {
+                            val document = firestore.collection("teams").document()
                             val team = Team(
-                                id = "",
+                                id = document.id,
                                 name = name,
                                 category = category,
                                 createdAt = System.currentTimeMillis()
                             )
-                            firestore.collection("teams").add(team)
+                            document.set(team)
                                 .addOnSuccessListener {
                                     isLoading = false
                                     navController.popBackStack()

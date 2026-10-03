@@ -31,7 +31,7 @@ class PlayerRepository(
             // se guarda en Firestore como el campo "active".
             val players = snapshot.documents
                 .filter { it.getBoolean("active") != false }
-                .mapNotNull { it.toObject(Player::class.java) }
+                .mapNotNull { doc -> doc.toObject(Player::class.java)?.copy(id = doc.id) }
                 .sortedBy { it.name.lowercase() }
             emit(Result.Success(players))
         } catch (e: Exception) {
@@ -52,7 +52,7 @@ class PlayerRepository(
                 .get()
                 .await()
 
-            val player = snapshot.toObject(Player::class.java) ?: throw Exception("Jugador no encontrado")
+            val player = snapshot.toObject(Player::class.java)?.copy(id = snapshot.id) ?: throw Exception("Jugador no encontrado")
             emit(Result.Success(player))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al obtener jugador"))

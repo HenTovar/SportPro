@@ -147,8 +147,10 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController) {
                                 System.currentTimeMillis()
                             }
 
+                            val document = firestore.collection("teams").document(teamId)
+                                .collection("trainings").document()
                             val training = Training(
-                                id = "",
+                                id = document.id,
                                 teamId = teamId,
                                 objective = objective,
                                 date = parsedDate,
@@ -156,8 +158,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController) {
                                 exercises = selectedExercises,
                                 createdAt = System.currentTimeMillis()
                             )
-                            firestore.collection("teams").document(teamId)
-                                .collection("trainings").add(training)
+                            document.set(training)
                                 .addOnSuccessListener {
                                     isLoading = false
                                     navController.popBackStack()

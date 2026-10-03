@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import android.net.Uri
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -111,10 +112,14 @@ fun TeamsScreen(navController: NavHostController) {
                             }
                             Spacer(Modifier.width(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { navController.navigate("players/${equipo.id}") }) {
+                                OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
+                                    if (equipo.id.isNotBlank()) navController.navigate("players/${Uri.encode(equipo.id)}")
+                                }) {
                                     Text("Jugadores")
                                 }
-                                OutlinedButton(onClick = { navController.navigate("trainings/${equipo.id}") }) {
+                                OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
+                                    if (equipo.id.isNotBlank()) navController.navigate("trainings/${Uri.encode(equipo.id)}")
+                                }) {
                                     Text("Entrenamientos")
                                 }
                             }

@@ -20,10 +20,11 @@ class TeamRepository(
             emit(Result.Loading())
             // Sin where+orderBy combinados: eso exige un índice compuesto en Firestore.
             // Firestore guarda el Boolean `isActive` de Kotlin como el campo "active".
+            // El id sale del documento (equipos antiguos podían tener id="" guardado).
             val snapshot = firestore.collection("teams").get().await()
             val teams = snapshot.documents
                 .filter { it.getBoolean("active") != false }
-                .mapNotNull { it.toObject(Team::class.java) }
+                .mapNotNull { doc -> doc.toObject(Team::class.java)?.copy(id = doc.id) }
                 .sortedBy { it.name.lowercase() }
             emit(Result.Success(teams))
         } catch (e: Exception) {
@@ -38,7 +39,8 @@ class TeamRepository(
         try {
             emit(Result.Loading())
             val snapshot = firestore.collection("teams").document(teamId).get().await()
-            val team = snapshot.toObject(Team::class.java) ?: throw Exception("Equipo no encontrado")
+            val team = snapshot.toObject(Team::class.java)?.copy(id = snapshot.id)
+                ?: throw Exception("Equipo no encontrado")
             emit(Result.Success(team))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al obtener equipo"))

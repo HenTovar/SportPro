@@ -207,8 +207,10 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController) {
                                 0L
                             }
 
+                            val document = firestore.collection("teams").document(teamId)
+                                .collection("players").document()
                             val player = Player(
-                                id = "",
+                                id = document.id,
                                 teamId = teamId,
                                 name = name,
                                 position = PlayerPosition.values().firstOrNull { it.name == position.uppercase().replace(" ", "_") } ?: PlayerPosition.DELANTERO,
@@ -219,8 +221,7 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController) {
                                 photoUrl = photoUrl,
                                 createdAt = System.currentTimeMillis()
                             )
-                            firestore.collection("teams").document(teamId)
-                                .collection("players").add(player)
+                            document.set(player)
                                 .addOnSuccessListener {
                                     isLoading = false
                                     navController.popBackStack()

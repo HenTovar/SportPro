@@ -24,12 +24,15 @@ class PlayerRepository(
             val snapshot = firestore.collection("teams")
                 .document(teamId)
                 .collection("players")
-                .whereEqualTo("isActive", true)
-                .orderBy("name")
                 .get()
                 .await()
 
-            val players = snapshot.documents.mapNotNull { it.toObject(Player::class.java) }
+            // Sin where+orderBy combinados (exigen índice compuesto). El Boolean `isActive`
+            // se guarda en Firestore como el campo "active".
+            val players = snapshot.documents
+                .filter { it.getBoolean("active") != false }
+                .mapNotNull { it.toObject(Player::class.java) }
+                .sortedBy { it.name.lowercase() }
             emit(Result.Success(players))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al obtener jugadores"))
@@ -116,7 +119,7 @@ class PlayerRepository(
                 .document(teamId)
                 .collection("players")
                 .document(playerId)
-                .update("isActive", false)
+                .update("active", false)
                 .await()
 
             emit(Result.Success(true))

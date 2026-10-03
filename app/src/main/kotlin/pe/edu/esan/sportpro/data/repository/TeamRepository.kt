@@ -18,13 +18,13 @@ class TeamRepository(
     fun getAllTeams(): Flow<Result<List<Team>>> = flow {
         try {
             emit(Result.Loading())
-            val snapshot = firestore.collection("teams")
-                .whereEqualTo("isActive", true)
-                .orderBy("name")
-                .get()
-                .await()
-
-            val teams = snapshot.documents.mapNotNull { it.toObject(Team::class.java) }
+            // Sin where+orderBy combinados: eso exige un índice compuesto en Firestore.
+            // Firestore guarda el Boolean `isActive` de Kotlin como el campo "active".
+            val snapshot = firestore.collection("teams").get().await()
+            val teams = snapshot.documents
+                .filter { it.getBoolean("active") != false }
+                .mapNotNull { it.toObject(Team::class.java) }
+                .sortedBy { it.name.lowercase() }
             emit(Result.Success(teams))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al obtener equipos"))
@@ -84,7 +84,7 @@ class TeamRepository(
     fun deleteTeam(teamId: String): Flow<Result<Boolean>> = flow {
         try {
             emit(Result.Loading())
-            firestore.collection("teams").document(teamId).update("isActive", false).await()
+            firestore.collection("teams").document(teamId).update("active", false).await()
             emit(Result.Success(true))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al eliminar equipo"))

@@ -64,3 +64,6 @@ app/google-services.json
 
 # El wrapper de Gradle SÍ se versiona (lo necesita gradlew en Windows)
 !gradle/wrapper/gradle-wrapper.jar
+
+# Local JavaScript dependencies (including Firebase test emulator)
+node_modules/

@@ -2,6 +2,8 @@
 
 package pe.edu.esan.sportpro.ui.screens.trainings
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -83,7 +85,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
             TopAppBar(
                 title = { Text(if (trainingId == null) "Crear Entrenamiento" else "Editar Entrenamiento") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, "Back")
                     }
                 }
@@ -211,7 +213,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
                                     "updatedAt" to System.currentTimeMillis()
                                 )).await()
                             }
-                            navController.popBackStack()
+                            navController.safeBack()
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -462,7 +464,7 @@ private fun FormUnavailable(loading: Boolean, error: String, navController: NavH
     ) {
         if (loading) CircularProgressIndicator()
         else Text(error, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        TextButton(onClick = { navController.safeBack() }) { Text("Volver") }
     }
 }
 

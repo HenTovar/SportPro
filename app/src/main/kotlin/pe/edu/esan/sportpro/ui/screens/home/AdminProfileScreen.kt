@@ -1,5 +1,7 @@
 package pe.edu.esan.sportpro.ui.screens.home
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -92,7 +94,7 @@ fun AdminProfileScreen(navController: NavHostController) {
         }
         if (busy) CircularProgressIndicator()
         Text(message)
-        OutlinedButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        OutlinedButton(onClick = { navController.safeBack() }) { Text("Volver") }
     }
 }
 
@@ -156,6 +158,6 @@ fun AdminRequestsScreen(navController: NavHostController) {
             } }
         }
         OutlinedButton(enabled = !busy, onClick = { refresh++ }) { Text("Actualizar") }
-        OutlinedButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        OutlinedButton(onClick = { navController.safeBack() }) { Text("Volver") }
     }
 }

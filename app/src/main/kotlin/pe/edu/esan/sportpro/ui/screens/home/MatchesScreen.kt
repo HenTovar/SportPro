@@ -1,5 +1,7 @@
 package pe.edu.esan.sportpro.ui.screens.home
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,7 +46,7 @@ fun MatchesScreen(teamId: String, navController: NavHostController) {
         finally { loading = false }
     }
     Scaffold(topBar = { TopAppBar(title = { Text("Partidos del equipo") }, navigationIcon = {
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        TextButton(onClick = { navController.safeBack() }) { Text("Volver") }
     }) }) { padding ->
         Column(Modifier.padding(padding).padding(16.dp)) {
             if (loading) CircularProgressIndicator()

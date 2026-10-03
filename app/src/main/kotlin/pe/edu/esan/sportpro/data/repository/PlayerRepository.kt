@@ -2,6 +2,7 @@ package pe.edu.esan.sportpro.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -35,6 +36,7 @@ class PlayerRepository(
                 .sortedBy { it.name.lowercase() }
             emit(Result.Success(players))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener jugadores"))
         }
     }
@@ -55,6 +57,7 @@ class PlayerRepository(
             val player = snapshot.toObject(Player::class.java)?.copy(id = snapshot.id) ?: throw Exception("Jugador no encontrado")
             emit(Result.Success(player))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener jugador"))
         }
     }
@@ -84,6 +87,7 @@ class PlayerRepository(
 
             emit(Result.Success(newPlayer))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al crear jugador"))
         }
     }
@@ -105,6 +109,7 @@ class PlayerRepository(
 
             emit(Result.Success(updatedPlayer))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al actualizar jugador"))
         }
     }
@@ -124,6 +129,7 @@ class PlayerRepository(
 
             emit(Result.Success(true))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al eliminar jugador"))
         }
     }
@@ -139,6 +145,7 @@ class PlayerRepository(
             val downloadUrl = photoRef.downloadUrl.await().toString()
             emit(Result.Success(downloadUrl))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al cargar foto"))
         }
     }

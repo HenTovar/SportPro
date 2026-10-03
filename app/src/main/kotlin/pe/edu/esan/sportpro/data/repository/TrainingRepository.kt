@@ -1,6 +1,7 @@
 package pe.edu.esan.sportpro.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -29,6 +30,7 @@ class TrainingRepository(
             val trainings = snapshot.documents.mapNotNull { doc -> doc.toObject(Training::class.java)?.copy(id = doc.id) }
             emit(Result.Success(trainings))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener entrenamientos"))
         }
     }
@@ -61,6 +63,7 @@ class TrainingRepository(
 
             emit(Result.Success(newTraining))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al crear entrenamiento"))
         }
     }
@@ -82,6 +85,7 @@ class TrainingRepository(
 
             emit(Result.Success(updatedTraining))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al actualizar entrenamiento"))
         }
     }
@@ -117,6 +121,7 @@ class TrainingRepository(
 
             emit(Result.Success(newAttendance))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al registrar asistencia"))
         }
     }
@@ -132,6 +137,7 @@ class TrainingRepository(
             }.sortedByDescending { it.recordedAt }.distinctBy { it.playerId }
             emit(Result.Success(records))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al recuperar asistencia"))
         }
     }
@@ -156,6 +162,7 @@ class TrainingRepository(
                 .distinctBy { it.trainingId }
             emit(Result.Success(records))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener historial de asistencia"))
         }
     }

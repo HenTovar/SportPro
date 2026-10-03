@@ -1,6 +1,7 @@
 package pe.edu.esan.sportpro.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -28,6 +29,7 @@ class TeamRepository(
                 .sortedBy { it.name.lowercase() }
             emit(Result.Success(teams))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener equipos"))
         }
     }
@@ -43,6 +45,7 @@ class TeamRepository(
                 ?: throw Exception("Equipo no encontrado")
             emit(Result.Success(team))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener equipo"))
         }
     }
@@ -62,6 +65,7 @@ class TeamRepository(
             firestore.collection("teams").document(newTeamId).set(newTeam).await()
             emit(Result.Success(newTeam))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al crear equipo"))
         }
     }
@@ -76,6 +80,7 @@ class TeamRepository(
             firestore.collection("teams").document(team.id).set(updatedTeam).await()
             emit(Result.Success(updatedTeam))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al actualizar equipo"))
         }
     }
@@ -89,6 +94,7 @@ class TeamRepository(
             firestore.collection("teams").document(teamId).update("active", false).await()
             emit(Result.Success(true))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al eliminar equipo"))
         }
     }

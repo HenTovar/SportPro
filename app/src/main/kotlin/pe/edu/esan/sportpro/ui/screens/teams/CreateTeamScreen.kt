@@ -2,6 +2,8 @@
 
 package pe.edu.esan.sportpro.ui.screens.teams
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -62,7 +64,7 @@ fun CreateTeamScreen(navController: NavHostController, teamId: String? = null) {
             TopAppBar(
                 title = { Text(if (teamId == null) "Crear Equipo" else "Editar Equipo") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, "Back")
                     }
                 }
@@ -142,7 +144,7 @@ fun CreateTeamScreen(navController: NavHostController, teamId: String? = null) {
                                     "updatedAt" to System.currentTimeMillis()
                                 )).await()
                             }
-                            navController.popBackStack()
+                            navController.safeBack()
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -186,6 +188,6 @@ private fun FormUnavailable(loading: Boolean, error: String, navController: NavH
     ) {
         if (loading) CircularProgressIndicator()
         else Text(error, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        TextButton(onClick = { navController.safeBack() }) { Text("Volver") }
     }
 }

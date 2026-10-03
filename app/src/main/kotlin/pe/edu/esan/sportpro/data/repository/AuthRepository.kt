@@ -2,6 +2,8 @@ package pe.edu.esan.sportpro.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -43,6 +45,7 @@ class AuthRepository(
             firestore.collection("users").document(uid).set(user).await()
             emit(Result.Success(user))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error desconocido"))
         }
     }
@@ -62,6 +65,7 @@ class AuthRepository(
 
             emit(Result.Success(user))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error desconocido"))
         }
     }
@@ -69,20 +73,19 @@ class AuthRepository(
     /**
      * Obtiene el usuario actual autenticado.
      */
-    fun getCurrentUser(): Flow<Result<User?>> = flow {
-        try {
-            emit(Result.Loading())
-            val currentUser = firebaseAuth.currentUser
-            if (currentUser != null) {
-                val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
-                val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id)
-                emit(Result.Success(user))
-            } else {
-                emit(Result.Success(null))
-            }
-        } catch (e: Exception) {
-            emit(Result.Error(e.message ?: "Error desconocido"))
+    fun getCurrentUser(): Flow<Result<User?>> = flow<Result<User?>> {
+        emit(Result.Loading())
+        val currentUser = firebaseAuth.currentUser
+        if (currentUser != null) {
+            val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
+            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id)
+            emit(Result.Success(user))
+        } else {
+            emit(Result.Success(null))
         }
+    }.catch { e ->
+        // Handle source errors, never cancellation from first()/a screen leaving.
+        emit(Result.Error(e.message ?: "Error desconocido"))
     }
 
     /**

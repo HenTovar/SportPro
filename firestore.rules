@@ -1,119 +1,134 @@
 rules_version = '2';
 
-/**
- * Reglas de seguridad de Firestore para SportPro.
- *
- * Estructura de base de datos:
- * - users/{uid}: Perfil de usuario con rol
- * - teams/{teamId}: Información del equipo
- * - teams/{teamId}/players/{playerId}: Jugadores del equipo
- * - teams/{teamId}/trainings/{trainingId}: Entrenamientos
- * - teams/{teamId}/attendance/{attendanceId}: Registros de asistencia
- * - matches/{matchId}: Información del partido
- * - matches/{matchId}/events/{eventId}: Eventos del partido
- */
-
+// SportPro: las asignaciones se administran por staff; nunca desde el registro.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Función para validar el rol del usuario
-    function getRole(uid) {
-      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function signedIn() { return request.auth != null; }
+    function creator() {
+      return signedIn() && request.auth.token.email == 'harontovar@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+    function activeUser() {
+      // Kotlin serializa isActive como active. Un active=false prevalece sobre legado.
+      return signedIn() && profile().get('active', profile().get('isActive', false)) == true;
+    }
+    function staff() {
+      return activeUser() && profile().role in ['ADMIN', 'ENTRENADOR'];
+    }
+    function mayApprove(target) {
+      return creator() || (activeUser() &&
+        ((target in ['JUGADOR', 'PADRE'] && profile().role in ['ENTRENADOR', 'ADMIN'])
+          || (target == 'ENTRENADOR' && profile().role == 'ADMIN')));
+    }
+    function validRequest(uid) {
+      return request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'fromRole', 'toRole', 'status', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.fromRole == get(/databases/$(database)/documents/users/$(uid)).data.role
+        && request.resource.data.toRole in ['JUGADOR', 'PADRE', 'ENTRENADOR', 'ADMIN']
+        && request.resource.data.toRole != request.resource.data.fromRole
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.createdAt == request.time;
+    }
+    function restricted() {
+      return activeUser() && profile().role in ['JUGADOR', 'PADRE'];
+    }
+    function assignedTeam(teamId) {
+      return restricted() && teamId != '' && profile().get('teamId', '') == teamId;
+    }
+    function assignedPlayer(teamId, playerId) {
+      return assignedTeam(teamId) && playerId != '' && profile().get('playerId', '') == playerId;
+    }
+    function matchReader(matchId) {
+      let matchData = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      return staff() || assignedTeam(matchData.get('teamA', ''))
+        || assignedTeam(matchData.get('teamB', ''));
     }
 
-    function isAdmin(uid) {
-      return getRole(uid) == 'ADMIN';
-    }
-
-    function isTrainer(uid) {
-      return getRole(uid) == 'ENTRENADOR';
-    }
-
-    function isPlayer(uid) {
-      return getRole(uid) == 'JUGADOR';
-    }
-
-    function isParent(uid) {
-      return getRole(uid) == 'PADRE';
-    }
-
-    function isTeamOwner(teamId, uid) {
-      return get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid;
-    }
-
-    // Colección de usuarios
     match /users/{uid} {
-      allow read: if request.auth.uid == uid || isAdmin(request.auth.uid);
-      allow create: if request.auth.uid == uid;
-      allow update, delete: if request.auth.uid == uid || isAdmin(request.auth.uid);
+      allow read: if signedIn() && (request.auth.uid == uid || staff());
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'email', 'role', 'photoUrl', 'createdAt', 'active', 'isActive', 'teamId', 'playerId'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.role in ['ENTRENADOR', 'JUGADOR', 'PADRE']
+        && request.resource.data.get('teamId', '') == ''
+        && request.resource.data.get('playerId', '') == ''
+        && request.resource.data.get('active', true) == true
+        && request.resource.data.get('isActive', true) == true;
+      // Sólo el creador verificado aprueba solicitudes ajenas mediante escritura atómica.
+      allow update: if (signedIn() && request.auth.uid != uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+        && mayApprove(request.resource.data.role)
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'PENDING'
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.fromRole == resource.data.role
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.toRole == request.resource.data.role
+        && getAfter(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'APPROVED')
+        || staff()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId', 'playerId'])
+        && request.resource.data.teamId is string
+        && request.resource.data.playerId is string;
+      allow delete: if false;
     }
 
-    // Colección de equipos
+    match /roleRequests/{uid} {
+      allow create: if signedIn() && validRequest(uid);
+      // Query by allowed toRole: rules never return requests above the approver.
+      allow read: if mayApprove(resource.data.toRole);
+      allow update: if signedIn() && (
+        (resource.data.status in ['APPROVED', 'REJECTED'] && validRequest(uid))
+        || (request.auth.uid != uid && mayApprove(resource.data.toRole)
+          && resource.data.status == 'PENDING'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && (request.resource.data.status == 'REJECTED'
+            || (request.resource.data.status == 'APPROVED'
+              && get(/databases/$(database)/documents/users/$(uid)).data.role == resource.data.fromRole
+              && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == resource.data.toRole))));
+      allow delete: if false;
+    }
+
     match /teams/{teamId} {
-      allow read: if resource.data.isActive == true;
-      allow create: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid);
-      allow update: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
-      allow delete: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
+      allow read: if staff() || assignedTeam(teamId);
+      allow write: if staff();
 
-      // Subcoleción de jugadores
       match /players/{playerId} {
-        allow read: if resource.data.isActive == true &&
-                       (isAdmin(request.auth.uid) ||
-                        isTeamOwner(teamId, request.auth.uid) ||
-                        isTrainer(request.auth.uid) ||
-                        (isPlayer(request.auth.uid) && resource.data.parentUid == request.auth.uid) ||
-                        (isParent(request.auth.uid) && resource.data.parentUid == request.auth.uid));
-
-        allow create: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
-        allow update: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
-        allow delete: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
+        allow read: if staff() || assignedPlayer(teamId, playerId);
+        allow write: if staff();
       }
-
-      // Subcoleción de entrenamientos
       match /trainings/{trainingId} {
-        allow read: if resource.data.isActive == true;
-        allow create: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
-        allow update: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
-        allow delete: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
+        allow read: if staff() || assignedTeam(teamId);
+        allow write: if staff();
       }
-
-      // Subcoleción de asistencia
       match /attendance/{attendanceId} {
-        allow read: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid) || isTrainer(request.auth.uid);
-        allow create: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid) || isTrainer(request.auth.uid);
-        allow update: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid) || isTrainer(request.auth.uid);
-        allow delete: if isAdmin(request.auth.uid) || isTeamOwner(teamId, request.auth.uid);
+        // Las consultas de lectores deben incluir whereEqualTo("playerId", asignado).
+        allow read: if staff() || assignedPlayer(teamId, resource.data.playerId);
+        allow write: if staff();
       }
     }
 
-    // Colección de partidos y eventos
     match /matches/{matchId} {
-      allow read: if resource.data.isActive == true;
-      allow create: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid);
-      allow update: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid) ||
-                       (resource.data.operatorId == request.auth.uid && request.auth != null);
-      allow delete: if isAdmin(request.auth.uid);
-
-      // Subcoleción de eventos
+      // Para lectores, consultar por teamA o teamB; sin equipo asignado se deniega.
+      allow read: if staff() || assignedTeam(resource.data.get('teamA', ''))
+        || assignedTeam(resource.data.get('teamB', ''));
+      allow write: if staff();
       match /events/{eventId} {
-        allow read: if get(/databases/$(database)/documents/matches/$(matchId)).data.isActive == true;
-        allow create: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid) ||
-                         (get(/databases/$(database)/documents/matches/$(matchId)).data.operatorId == request.auth.uid &&
-                          request.auth != null);
-        allow update: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid);
-        allow delete: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid);
+        allow read: if matchReader(matchId);
+        allow write: if staff();
       }
-
-      // Subcoleción de resúmenes de IA
       match /aiSummaries/{summaryId} {
-        allow read: if get(/databases/$(database)/documents/matches/$(matchId)).data.isActive == true;
-        allow create: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid);
-        allow update: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid);
-        allow delete: if isAdmin(request.auth.uid) || isTrainer(request.auth.uid);
+        allow read: if matchReader(matchId);
+        allow write: if staff();
       }
     }
 
-    // Deny all by default
+    match /exercises/{exerciseId} {
+      allow read, write: if staff();
+    }
     match /{document=**} {
       allow read, write: if false;
     }

@@ -101,7 +101,7 @@ fun RegisterScreen(
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            UserRole.values().forEach { role ->
+            pe.edu.esan.sportpro.data.model.RolePolicy.registrationRoles.forEach { role ->
                 FilterChip(
                     selected = uiState.selectedRole == role,
                     onClick = { viewModel.setRole(role) },

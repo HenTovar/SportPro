@@ -21,6 +21,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import kotlinx.coroutines.flow.first
+import pe.edu.esan.sportpro.data.model.RolePolicy
+import pe.edu.esan.sportpro.data.repository.Result
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,11 +51,16 @@ import java.util.Locale
 fun TrainingsScreen(teamId: String, navController: NavHostController) {
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
+    var ownPlayerId by remember { mutableStateOf("") }
     var estado by remember { mutableStateOf<EstadoLista<Training>>(EstadoLista.Cargando) }
-    val formatoFecha = remember { SimpleDateFormat("dd/MM/yyyy", Locale("es", "PE")) }
+    val formatoFecha = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE")) }
 
     LaunchedEffect(teamId) {
-        container.trainingRepository.getTrainingsByTeam(teamId).collect { estado = it.aEstadoLista() }
+        val profile = container.authRepository.getCurrentUser().first { it !is Result.Loading }
+        val user = (profile as? Result.Success)?.data
+        ownPlayerId = user?.playerId.orEmpty()
+        if (!RolePolicy.canReadTeam(user, teamId)) estado = EstadoLista.Error("No tienes acceso a este equipo")
+        else container.trainingRepository.getTrainingsByTeam(teamId).collect { estado = it.aEstadoLista() }
     }
 
     Scaffold(
@@ -96,8 +104,10 @@ fun TrainingsScreen(teamId: String, navController: NavHostController) {
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
+                            if (esStaff) OutlinedButton(onClick = { navController.navigate("editTraining/$teamId/${sesion.id}") }) { Text("Editar entrenamiento") }
                             OutlinedButton(
-                                onClick = { navController.navigate("attendance/$teamId/${sesion.id}") },
+                                enabled = esStaff || ownPlayerId.isNotBlank(),
+                                onClick = { navController.navigate(if (esStaff) "attendance/$teamId/${sesion.id}" else "attendanceHistory/$teamId/$ownPlayerId") },
                                 modifier = Modifier.padding(top = 8.dp)
                             ) {
                                 Text(if (esStaff) "Registrar asistencia" else "Ver asistencia")

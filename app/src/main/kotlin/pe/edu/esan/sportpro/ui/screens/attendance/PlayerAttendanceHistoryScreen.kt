@@ -36,7 +36,7 @@ fun PlayerAttendanceHistoryScreen(
     }
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(teamId, playerId) {
         viewModel.loadAttendanceHistory(teamId, playerId)
     }
 
@@ -121,31 +121,33 @@ fun PlayerAttendanceHistoryScreen(
                 )
             }
 
-            // Historial de registros
-            Text(
-                text = "Registros de Asistencia",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            AttendanceCalendar(uiState.trainings, uiState.records)
 
+            Text("Entrenamientos programados", style = MaterialTheme.typography.titleMedium)
             LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (uiState.records.isEmpty()) {
-                    item {
-                        Text(
-                            text = "Sin registros de asistencia",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline
-                        )
+                if (uiState.trainings.isEmpty()) {
+                    item { Text("No hay entrenamientos programados") }
+                }
+                items(uiState.trainings, key = { it.id }) { training ->
+                    val record = uiState.records.find { it.trainingId == training.id }
+                    Card(Modifier.fillMaxWidth()) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(training.name)
+                                Text(java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                                    .format(java.util.Date(training.date)))
+                            }
+                            Text(if (training.status == pe.edu.esan.sportpro.data.model.TrainingStatus.CANCELADO)
+                                "Cancelado" else record?.status?.let { attendanceStatusLabel(it) } ?: "Sin registrar")
+                        }
                     }
-                } else {
-                    items(uiState.records) { record ->
-                        AttendanceRecordItem(record)
-                    }
+                }
+                // Keep historical marks visible if their training is no longer available.
+                items(uiState.records.filter { record -> uiState.trainings.none { it.id == record.trainingId } }) { record ->
+                    AttendanceRecordItem(record)
                 }
             }
         }
@@ -176,7 +178,7 @@ fun AttendanceRecordItem(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "Sesión: ${record.trainingId.substring(0, 8)}",
+                    text = "Sesión: ${record.trainingId.take(8)}",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
@@ -202,5 +204,74 @@ fun AttendanceRecordItem(
                 }
             )
         }
+    }
+}
+
+
+internal fun attendanceStatusLabel(status: AttendanceStatus): String = when (status) {
+    AttendanceStatus.ASISTIO -> "✓ Presente"
+    AttendanceStatus.FALTA -> "✗ Ausente"
+    AttendanceStatus.LESION -> "Lesión"
+    AttendanceStatus.EXCUSED -> "Excusado"
+}
+
+/** Calendar dates come from the scheduled session, never the time a mark was edited. */
+@Composable
+private fun AttendanceCalendar(
+    trainings: List<pe.edu.esan.sportpro.data.model.Training>,
+    records: List<pe.edu.esan.sportpro.data.model.AttendanceRecord>
+) {
+    var monthOffset by remember { mutableStateOf(0) }
+    val month = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.DAY_OF_MONTH, 1)
+        add(java.util.Calendar.MONTH, monthOffset)
+    }
+    val year = month.get(java.util.Calendar.YEAR)
+    val monthNumber = month.get(java.util.Calendar.MONTH)
+    val sessions = trainings.filter { training ->
+        java.util.Calendar.getInstance().apply { timeInMillis = training.date }.let {
+            it.get(java.util.Calendar.YEAR) == year && it.get(java.util.Calendar.MONTH) == monthNumber
+        }
+    }.groupBy { training ->
+        java.util.Calendar.getInstance().apply { timeInMillis = training.date }.get(java.util.Calendar.DAY_OF_MONTH)
+    }
+    val marks = records.associateBy { it.trainingId }
+    val offset = (month.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
+    val days = month.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { monthOffset-- }) { Text("‹") }
+            Text(java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(month.time))
+            TextButton(onClick = { monthOffset++ }) { Text("›") }
+        }
+        Row(Modifier.fillMaxWidth()) {
+            listOf("L", "M", "M", "J", "V", "S", "D").forEach { day ->
+                Text(day, Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+        }
+        repeat((offset + days + 6) / 7) { week ->
+            Row(Modifier.fillMaxWidth()) {
+                repeat(7) { weekday ->
+                    val day = week * 7 + weekday - offset + 1
+                    val daySessions = sessions[day].orEmpty().filter {
+                        it.status != pe.edu.esan.sportpro.data.model.TrainingStatus.CANCELADO
+                    }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (day in 1..days) day.toString() else "")
+                        Text(daySessions.joinToString(" ") { session ->
+                            when (marks[session.id]?.status) {
+                                AttendanceStatus.ASISTIO -> "✓"
+                                AttendanceStatus.FALTA -> "✗"
+                                AttendanceStatus.LESION -> "L"
+                                AttendanceStatus.EXCUSED -> "E"
+                                null -> "·"
+                            }
+                        }, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+        Text("✓ Presente · ✗ Ausente · L Lesión · E Excusado · · Sin registrar",
+            style = MaterialTheme.typography.labelSmall)
     }
 }

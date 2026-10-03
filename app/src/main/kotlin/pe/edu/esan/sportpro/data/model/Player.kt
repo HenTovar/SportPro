@@ -19,6 +19,7 @@ data class Player(
     val emergencyContactName: String = "",
     val emergencyContactPhone: String = "",
     val parentUid: String? = null,
+    val userUid: String? = null,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
     val isActive: Boolean = true

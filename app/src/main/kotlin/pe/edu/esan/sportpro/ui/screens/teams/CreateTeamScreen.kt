@@ -12,24 +12,55 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.CancellationException
+
 import kotlinx.coroutines.launch
 import pe.edu.esan.sportpro.data.model.Team
 import pe.edu.esan.sportpro.data.model.TeamCategory
 
 @Composable
-fun CreateTeamScreen(navController: NavHostController) {
+fun CreateTeamScreen(navController: NavHostController, teamId: String? = null) {
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(TeamCategory.SUB_15) }
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var formReady by remember(teamId) { mutableStateOf(false) }
+    var checkingAccess by remember(teamId) { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val firestore = FirebaseFirestore.getInstance()
 
+    LaunchedEffect(teamId) {
+        try {
+            requireStaff(firestore)
+            if (teamId != null) {
+                val document = firestore.collection("teams").document(teamId).get().await()
+                check(document.exists()) { "El equipo ya no existe" }
+                val team = checkNotNull(document.toObject(Team::class.java))
+                name = team.name
+                category = team.category
+            }
+            formReady = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message ?: "No se pudo cargar el equipo"
+        } finally {
+            checkingAccess = false
+        }
+    }
+    if (!formReady) {
+        FormUnavailable(checkingAccess, error, navController)
+        return
+    }
+
     Scaffold(
+        modifier = Modifier.safeDrawingPadding(),
         topBar = {
             TopAppBar(
-                title = { Text("Crear Equipo") },
+                title = { Text(if (teamId == null) "Crear Equipo" else "Editar Equipo") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, "Back")
@@ -92,24 +123,31 @@ fun CreateTeamScreen(navController: NavHostController) {
                     isLoading = true
                     scope.launch {
                         try {
-                            val document = firestore.collection("teams").document()
-                            val team = Team(
-                                id = document.id,
-                                name = name,
-                                category = category,
-                                createdAt = System.currentTimeMillis()
-                            )
-                            document.set(team)
-                                .addOnSuccessListener {
-                                    isLoading = false
-                                    navController.popBackStack()
-                                }
-                                .addOnFailureListener { e ->
-                                    error = e.message ?: "Error al crear equipo"
-                                    isLoading = false
-                                }
+                            val uid = requireStaff(firestore)
+                            val collection = firestore.collection("teams")
+                            val document = teamId?.let(collection::document) ?: collection.document()
+                            if (teamId == null) {
+                                document.set(Team(
+                                    id = document.id,
+                                    name = name.trim(),
+                                    category = category,
+                                    ownerId = uid,
+                                    createdAt = System.currentTimeMillis()
+                                )).await()
+                            } else {
+                                document.update(mapOf(
+                                    "id" to document.id,
+                                    "name" to name.trim(),
+                                    "category" to category.name,
+                                    "updatedAt" to System.currentTimeMillis()
+                                )).await()
+                            }
+                            navController.popBackStack()
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             error = e.message ?: "Error"
+                        } finally {
                             isLoading = false
                         }
                     }
@@ -123,9 +161,31 @@ fun CreateTeamScreen(navController: NavHostController) {
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
-                    Text("Crear Equipo")
+                    Text(if (teamId == null) "Crear Equipo" else "Guardar cambios")
                 }
             }
         }
+    }
+}
+
+private suspend fun requireStaff(firestore: FirebaseFirestore): String {
+    val uid = checkNotNull(FirebaseAuth.getInstance().currentUser?.uid) { "Inicia sesión para continuar" }
+    val profile = firestore.collection("users").document(uid).get().await()
+    check(profile.getString("role") in setOf("ADMIN", "ENTRENADOR") && profile.getBoolean("active") != false) {
+        "Solo administradores y entrenadores pueden gestionar estos datos"
+    }
+    return uid
+}
+
+@Composable
+private fun FormUnavailable(loading: Boolean, error: String, navController: NavHostController) {
+    Column(
+        modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (loading) CircularProgressIndicator()
+        else Text(error, color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
     }
 }

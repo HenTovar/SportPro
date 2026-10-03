@@ -92,27 +92,47 @@ class TrainingRepository(
     fun recordAttendance(teamId: String, attendance: AttendanceRecord): Flow<Result<AttendanceRecord>> = flow {
         try {
             emit(Result.Loading())
-            val newAttendanceId = firestore.collection("teams")
-                .document(teamId)
-                .collection("attendance")
-                .document()
-                .id
-
+            require(attendance.trainingId.isNotBlank() && attendance.playerId.isNotBlank()) {
+                "Selecciona un entrenamiento y un jugador"
+            }
+            val collection = firestore.collection("teams").document(teamId).collection("attendance")
+            // Reuse legacy random IDs; new pairs receive a stable ID, including concurrent saves.
+            val existingId = attendance.id.ifBlank {
+                collection.whereEqualTo("trainingId", attendance.trainingId).get().await()
+                    .documents.mapNotNull { doc ->
+                        doc.toObject(AttendanceRecord::class.java)?.copy(id = doc.id)
+                    }.filter { it.playerId == attendance.playerId }
+                    .maxByOrNull { it.recordedAt }?.id.orEmpty()
+            }
+            val newAttendanceId = existingId.ifBlank {
+                java.util.UUID.nameUUIDFromBytes(
+                    "${attendance.trainingId}/${attendance.playerId}".toByteArray(Charsets.UTF_8)
+                ).toString()
+            }
             val newAttendance = attendance.copy(
                 id = newAttendanceId,
                 recordedAt = System.currentTimeMillis()
             )
-
-            firestore.collection("teams")
-                .document(teamId)
-                .collection("attendance")
-                .document(newAttendanceId)
-                .set(newAttendance)
-                .await()
+            collection.document(newAttendanceId).set(newAttendance).await()
 
             emit(Result.Success(newAttendance))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al registrar asistencia"))
+        }
+    }
+
+    /** Recovers saved marks before editing a session. */
+    fun getAttendanceForTraining(teamId: String, trainingId: String): Flow<Result<List<AttendanceRecord>>> = flow {
+        try {
+            emit(Result.Loading())
+            val snapshot = firestore.collection("teams").document(teamId).collection("attendance")
+                .whereEqualTo("trainingId", trainingId).get().await()
+            val records = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(AttendanceRecord::class.java)?.copy(id = doc.id)
+            }.sortedByDescending { it.recordedAt }.distinctBy { it.playerId }
+            emit(Result.Success(records))
+        } catch (e: Exception) {
+            emit(Result.Error(e.message ?: "Error al recuperar asistencia"))
         }
     }
 
@@ -131,8 +151,9 @@ class TrainingRepository(
 
             // Orden en la app: where+orderBy en campos distintos exige índice compuesto.
             val records = snapshot.documents
-                .mapNotNull { it.toObject(AttendanceRecord::class.java) }
+                .mapNotNull { doc -> doc.toObject(AttendanceRecord::class.java)?.copy(id = doc.id) }
                 .sortedByDescending { it.recordedAt }
+                .distinctBy { it.trainingId }
             emit(Result.Success(records))
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Error al obtener historial de asistencia"))

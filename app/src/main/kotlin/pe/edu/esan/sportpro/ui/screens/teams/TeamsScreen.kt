@@ -27,6 +27,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import kotlinx.coroutines.flow.first
+import pe.edu.esan.sportpro.data.model.RolePolicy
+import pe.edu.esan.sportpro.data.repository.Result
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,7 +55,7 @@ import pe.edu.esan.sportpro.ui.common.rememberEsStaff
  * y a sus entrenamientos. Sólo ADMIN/ENTRENADOR pueden crear o eliminar.
  */
 @Composable
-fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false) {
+fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false, pickMatches: Boolean = false) {
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
     var estado by remember { mutableStateOf<EstadoLista<Team>>(EstadoLista.Cargando) }
@@ -61,13 +64,25 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(recarga) {
-        container.teamRepository.getAllTeams().collect { estado = it.aEstadoLista() }
+        val profile = container.authRepository.getCurrentUser().first { it !is Result.Loading }
+        val user = (profile as? Result.Success)?.data
+        if (profile is Result.Error) estado = EstadoLista.Error(profile.message)
+        else if (user == null) estado = EstadoLista.Error("Inicia sesión para ver equipos")
+        else if (RolePolicy.isStaff(user.role)) container.teamRepository.getAllTeams().collect { estado = it.aEstadoLista() }
+        else if (user.teamId.isBlank()) estado = EstadoLista.Datos(emptyList())
+        else container.teamRepository.getTeamById(user.teamId).collect { value ->
+            estado = when (value) {
+                is Result.Success -> EstadoLista.Datos(listOf(value.data))
+                is Result.Error -> EstadoLista.Error(value.message)
+                is Result.Loading -> EstadoLista.Cargando
+            }
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (pickTrainings) "Elegí un equipo" else "Equipos") },
+                title = { Text(if (pickTrainings || pickMatches) "Elegí un equipo" else "Equipos") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
@@ -76,7 +91,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
             )
         },
         floatingActionButton = {
-            if (esStaff && !pickTrainings) {
+            if (esStaff && !(pickTrainings || pickMatches)) {
                 FloatingActionButton(onClick = { navController.navigate("createTeam") }) {
                     Icon(Icons.Filled.Add, contentDescription = "Crear equipo")
                 }
@@ -96,8 +111,8 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                 // Agrupados por categoría (sub-10, sub-15, primera…)
                 items(equipos.sortedBy { it.category.ordinal }) { equipo ->
                     Card(modifier = Modifier.fillMaxWidth().then(
-                        if (pickTrainings) Modifier.clickable(enabled = equipo.id.isNotBlank()) {
-                            navController.navigate("trainings/${Uri.encode(equipo.id)}")
+                        if (pickTrainings || pickMatches) Modifier.clickable(enabled = equipo.id.isNotBlank()) {
+                            navController.navigate("${if (pickMatches) "matches" else "trainings"}/${Uri.encode(equipo.id)}")
                         } else Modifier
                     )) {
                         Column(Modifier.padding(16.dp)) {
@@ -109,13 +124,14 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
-                                if (esStaff && !pickTrainings) {
+                                if (esStaff && !(pickTrainings || pickMatches)) {
+                                    TextButton(onClick = { navController.navigate("editTeam/${Uri.encode(equipo.id)}") }) { Text("Editar") }
                                     IconButton(onClick = { aEliminar = equipo }) {
                                         Icon(Icons.Filled.Delete, contentDescription = "Eliminar equipo")
                                     }
                                 }
                             }
-                            if (!pickTrainings) {
+                            if (!(pickTrainings || pickMatches)) {
                                 Spacer(Modifier.width(8.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {

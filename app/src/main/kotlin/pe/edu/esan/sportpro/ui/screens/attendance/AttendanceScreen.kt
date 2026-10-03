@@ -35,7 +35,7 @@ fun AttendanceScreen(
     }
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(teamId, trainingId) {
         viewModel.loadAttendanceData(teamId, trainingId)
     }
 
@@ -77,6 +77,12 @@ fun AttendanceScreen(
                 )
             }
 
+            uiState.training?.let { training ->
+                Text(training.name, style = MaterialTheme.typography.titleMedium)
+                Text(java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(training.date)))
+            }
+            Text("Marca presente con la casilla; pulsa el estado para marcar ausente.")
             // Lista de jugadores con toggles
             LazyColumn(
                 modifier = Modifier
@@ -84,14 +90,16 @@ fun AttendanceScreen(
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(uiState.players) { player ->
+                items(uiState.players, key = { it.id }) { player ->
                     AttendancePlayerItem(
                         player = player,
                         isPresent = uiState.attendanceMarks[player.id] ?: false,
                         onToggle = { isPresent ->
                             viewModel.toggleAttendance(player.id, isPresent)
                         },
-                        canEdit = viewModel.canMarkAttendance()
+                        canEdit = viewModel.canMarkAttendance() && uiState.isReady && !uiState.isSaving,
+                        statusLabel = if (player.id in uiState.editedPlayers) null else
+                            uiState.savedRecords[player.id]?.status?.let { attendanceStatusLabel(it) } ?: "Sin registrar"
                     )
                 }
             }
@@ -102,7 +110,7 @@ fun AttendanceScreen(
                     onClick = {
                         viewModel.saveAttendance(teamId, trainingId)
                     },
-                    enabled = !uiState.isSaving && uiState.players.isNotEmpty(),
+                    enabled = uiState.isReady && !uiState.isSaving && uiState.editedPlayers.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -111,7 +119,7 @@ fun AttendanceScreen(
                 }
 
                 if (uiState.saveSuccess) {
-                    LaunchedEffect(Unit) {
+                    LaunchedEffect(teamId, trainingId) {
                         navController.popBackStack()
                     }
                 }
@@ -128,12 +136,13 @@ fun AttendancePlayerItem(
     player: pe.edu.esan.sportpro.data.model.Player,
     isPresent: Boolean,
     onToggle: (Boolean) -> Unit,
-    canEdit: Boolean
+    canEdit: Boolean,
+    statusLabel: String? = null
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(60.dp)
+            .heightIn(min = 72.dp)
     ) {
         Row(
             modifier = Modifier
@@ -154,13 +163,12 @@ fun AttendancePlayerItem(
                     onCheckedChange = { onToggle(it) },
                     modifier = Modifier.size(24.dp)
                 )
-                Text(
-                    if (isPresent) "Presente" else "Ausente",
-                    style = MaterialTheme.typography.labelSmall
-                )
+                TextButton(onClick = { onToggle(false) }) {
+                    Text(statusLabel ?: if (isPresent) "Presente" else "Ausente")
+                }
             } else {
                 Text(
-                    if (isPresent) "Presente" else "Ausente",
+                    statusLabel ?: if (isPresent) "Presente" else "Ausente",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )

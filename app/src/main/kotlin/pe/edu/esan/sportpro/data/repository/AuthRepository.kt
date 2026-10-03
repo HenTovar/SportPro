@@ -27,6 +27,7 @@ class AuthRepository(
     ): Flow<Result<User>> = flow {
         try {
             emit(Result.Loading())
+            require(role in pe.edu.esan.sportpro.data.model.RolePolicy.registrationRoles) { "El administrador se asigna fuera del registro" }
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val uid = authResult.user?.uid ?: throw Exception("No UID obtenido")
 
@@ -57,7 +58,7 @@ class AuthRepository(
 
             // Obtener datos del usuario desde Firestore
             val userDoc = firestore.collection("users").document(uid).get().await()
-            val user = userDoc.toObject(User::class.java) ?: throw Exception("Usuario no encontrado")
+            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id) ?: throw Exception("Usuario no encontrado")
 
             emit(Result.Success(user))
         } catch (e: Exception) {
@@ -74,7 +75,7 @@ class AuthRepository(
             val currentUser = firebaseAuth.currentUser
             if (currentUser != null) {
                 val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
-                val user = userDoc.toObject(User::class.java)
+                val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id)
                 emit(Result.Success(user))
             } else {
                 emit(Result.Success(null))

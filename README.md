@@ -178,25 +178,6 @@ app/build/test-results/testDebugUnitTest/
 - **Mockito** y **Truth** para pruebas unitarias
 - **Gradle 8.10.2** para compilación
 
-## Notas Importantes
-
-1. **google-services.json**: Este archivo se genera desde Firebase y NO debe ser compartido públicamente. Está incluido en `.gitignore`.
-
-2. **Primeros pasos en la app**:
-   - Crea una cuenta con email y contraseña
-   - Selecciona tu rol (Entrenador para crear equipos y jugadores)
-   - Navega a la sección de Equipos y comienza a crear tu equipo
-
-3. **Restricciones de privacidad**:
-   - Los jugadores solo pueden ver su propio perfil
-   - Los padres pueden ver el perfil de sus hijos
-   - Los datos de contacto son privados según el rol
-
-4. **Flujo de la aplicación**:
-   - Si no está autenticado → Pantalla de Login/Registro
-   - Después de autenticarse → Home (según tu rol)
-   - Acceso a Equipos, Jugadores, Entrenamientos, Asistencia
-
 ## Próximos Pasos (Entregable 3+)
 
 - [ ] Implementar video en vivo de partidos

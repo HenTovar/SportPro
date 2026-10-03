@@ -251,16 +251,16 @@ docs: add technical design documentation
 **Rama actual:** `main`
 
 **Cambios recientes:**
-- ✅ Arreglo de errores de compilación
-- ✅ Adición de 30 pruebas unitarias
-- ✅ Creación de CreateTeamScreen con manejo de enums
-- ✅ Creación de CreateTrainingScreen con parseo de fechas
-- ✅ Creación de CreatePlayerScreen con subida de fotos
-- ✅ Configuración correcta de Gradle y dependencias
+- Arreglo de errores de compilación
+- Adición de 30 pruebas unitarias
+- Creación de CreateTeamScreen con manejo de enums
+- Creación de CreateTrainingScreen con parseo de fechas
+- Creación de CreatePlayerScreen con subida de fotos
+- Configuración correcta de Gradle y dependencias
 
 **Compilación:**
-- ✅ `./gradlew assembleDebug` → BUILD SUCCESSFUL
-- ✅ `./gradlew testDebugUnitTest` → 30 tests passed
+- `./gradlew assembleDebug` → BUILD SUCCESSFUL
+- `./gradlew testDebugUnitTest` → 30 tests passed
 
 ## Próximos Pasos para Entregas Futuras
 

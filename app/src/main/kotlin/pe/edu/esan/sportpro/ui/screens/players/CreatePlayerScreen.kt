@@ -2,6 +2,8 @@
 
 package pe.edu.esan.sportpro.ui.screens.players
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -119,7 +121,7 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
             TopAppBar(
                 title = { Text(if (playerId == null) "Crear Jugador" else "Editar Jugador") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, "Back")
                     }
                 }
@@ -317,7 +319,7 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
                                     transaction.update(document, fields)
                                 }
                             }.await()
-                            navController.popBackStack()
+                            navController.safeBack()
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -354,7 +356,7 @@ private fun FormUnavailable(loading: Boolean, error: String, navController: NavH
     ) {
         if (loading) CircularProgressIndicator()
         else Text(error, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { navController.popBackStack() }) { Text("Volver") }
+        TextButton(onClick = { navController.safeBack() }) { Text("Volver") }
     }
 }
 

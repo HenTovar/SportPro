@@ -2,6 +2,8 @@
 
 package pe.edu.esan.sportpro.ui.screens.trainings
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -68,7 +70,7 @@ fun TrainingsScreen(teamId: String, navController: NavHostController) {
             TopAppBar(
                 title = { Text("Entrenamientos") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }

@@ -2,6 +2,7 @@ package pe.edu.esan.sportpro.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -29,6 +30,7 @@ class ExerciseRepository(
             val exercises = snapshot.documents.mapNotNull { it.toObject(Exercise::class.java) }
             emit(Result.Success(exercises))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener ejercicios"))
         }
     }
@@ -49,6 +51,7 @@ class ExerciseRepository(
 
             emit(Result.Success(newExercise))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al crear ejercicio"))
         }
     }
@@ -67,6 +70,7 @@ class ExerciseRepository(
             val exercise = snapshot.toObject(Exercise::class.java) ?: throw Exception("Ejercicio no encontrado")
             emit(Result.Success(exercise))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener ejercicio"))
         }
     }
@@ -95,6 +99,7 @@ class ExerciseRepository(
             }
             emit(Result.Success(exercises))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(Result.Error(e.message ?: "Error al obtener ejercicios"))
         }
     }

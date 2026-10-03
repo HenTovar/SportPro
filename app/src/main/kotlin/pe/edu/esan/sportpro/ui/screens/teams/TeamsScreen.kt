@@ -2,6 +2,8 @@
 
 package pe.edu.esan.sportpro.ui.screens.teams
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -84,7 +86,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
             TopAppBar(
                 title = { Text(if (pickTrainings || pickMatches) "Elegí un equipo" else "Equipos") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }

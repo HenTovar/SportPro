@@ -2,6 +2,8 @@
 
 package pe.edu.esan.sportpro.ui.screens.players
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -81,7 +83,7 @@ fun PlayersScreen(teamId: String, navController: NavHostController) {
             TopAppBar(
                 title = { Text("Jugadores") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }

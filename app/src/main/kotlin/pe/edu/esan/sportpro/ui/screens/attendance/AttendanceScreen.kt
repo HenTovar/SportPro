@@ -2,6 +2,8 @@
 
 package pe.edu.esan.sportpro.ui.screens.attendance
 
+import pe.edu.esan.sportpro.ui.navigation.safeBack
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,7 +46,7 @@ fun AttendanceScreen(
             TopAppBar(
                 title = { Text("Marcar Asistencia") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, "Back")
                     }
                 }
@@ -120,7 +122,7 @@ fun AttendanceScreen(
 
                 if (uiState.saveSuccess) {
                     LaunchedEffect(teamId, trainingId) {
-                        navController.popBackStack()
+                        navController.safeBack()
                     }
                 }
             }

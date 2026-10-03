@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SportPro - Prototipo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-frame {
+            width: 100%;
+            aspect-ratio: 9/19;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .status-bar {
+            background: #1a1a1a;
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 24px;
+        }
+
+        .screen {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            background: white;
+            overflow-y: auto;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .header-subtitle {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: 'Roboto', sans-serif;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .radio-item input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            width: 100%;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 14px;
+            margin-right: 8px;
+        }
+
+        .btn-back {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .link {
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+
+        .list-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .list-item:hover {
+            background: #f9f9f9;
+        }
+
+        .list-item-title {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .list-item-subtitle {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-primary {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .badge-success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .badge-warning {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .badge-danger {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .match-scoreboard {
+            background: #f5f5f5;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .score {
+            font-size: 32px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .team-name {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .event-item {
+            display: flex;
+            gap: 12px;
+            padding: 8px;
+            background: #f9f9f9;
+            border-radius: 6px;
+        }
+
+        .event-time {
+            font-weight: 600;
+            color: #667eea;
+            min-width: 40px;
+        }
+
+        .event-content {
+            flex: 1;
+        }
+
+        .event-type {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .card {
+            background: #f9f9f9;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .field-lineup {
+            background: #2d5016;
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            font-family: monospace;
+            margin-bottom: 16px;
+        }
+
+        .footer {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .footer .btn {
+            flex: 1;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .alert-success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .alert-warning {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .breadcrumb {
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 4px;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            gap: 16px;
+            padding: 0 16px;
+        }
+
+        .tab {
+            padding: 12px 0;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-weight: 500;
+            color: #999;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 16px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .social-stats {
+            display: flex;
+            gap: 12px;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+
+        .social-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        .reaction-buttons {
+            display: flex;
+            gap: 8px;
+            margin: 8px 0;
+            font-size: 20px;
+        }
+
+        .reaction-btn {
+            background: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .reaction-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .lineup-position {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin: 4px;
+            cursor: grab;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="phone-frame">
+            <div class="status-bar">
+                <span>9:41</span>
+                <span>●●●●●</span>
+            </div>
+
+            <!-- P-01: Registro -->
+            <div class="screen active" id="P-01">
+                <div class="header">
+                    <h1>SportPro</h1>
+                </div>
+                <div class="content">
+                    <h2 style="margin-bottom: 16px; color: #333;">Crear Cuenta</h2>
+                    <div class="form-group">
+                        <label>Nombre Completo</label>
+                        <input type="text" placeholder="Juan Pérez">
+                    </div>
+                    <div class="form-group">
+                        <label>Correo Electrónico</label>
+                        <input type="email" placeholder="juan@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Contraseña</label>
+                        <input type="password" placeholder="Mínimo 8 caracteres">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirmar Contraseña</label>
+                        <input type="password" placeholder="Confirma tu contraseña">
+                    </div>
+                    <div class="form-group">
+                        <label>Rol</label>
+                        <select>
+                            <option value="">Selecciona tu rol...</option>
+                            <option value="dt">Entrenador/DT</option>
+                            <option value="jugador">Jugador</option>
+                            <option value="padre">Padre/Apoderado</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox">
+                        <label style="margin: 0;">Acepto términos y condiciones</label>
+                    </div>
+                    <div class="footer">
+                        <button class="btn btn-primary" onclick="goTo('P-02')">Registrarse</button>
+                    </div>
+                    <p style="text-align: center; margin-top: 16px; font-size: 14px;">
+                        ¿Ya tienes cuenta? <span class="link" onclick="goTo('P-02')">Inicia sesión</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- P-02: Login -->
+            <div class="screen" id="P-02">
+                <div class="header">
+                    <h1>SportPro</h1>
+                </div>
+                <div class="content">
+                    <h2 style="margin-bottom: 16px; color: #333;">Inicia Sesión</h2>
+                    <div class="form-group">
+                        <label>Correo Electrónico</label>
+                        <input type="email" placeholder="tu@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Contraseña</label>
+                        <input type="password" placeholder="Tu contraseña">
+                    </div>
+                    <button class="btn btn-primary" onclick="alert('En demo: DT, Jugador o Padre. Presiona atrás e intenta otro rol')">Iniciar Sesión</button>
+                    <p style="text-align: center; margin-top: 12px; font-size: 14px;">
+                        <span class="link" onclick="showAlert('Email de recuperación enviado')">Olvidé mi contraseña</span>
+                    </p>
+                    <p style="text-align: center; margin-top: 16px; font-size: 14px;">
+                        ¿No tienes cuenta? <span class="link" onclick="goTo('P-01')">Crea una</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- P-03: Home Entrenador -->
+            <div class="screen" id="P-03">
+                <div class="header">
+                    <h1>Mi Equipo</h1>
+                    <div class="header-subtitle">Entrenador - Academia Deportiva</div>
+                </div>
+                <div class="content">
+                    <div class="card">
+                        <h3>Próximo Partido</h3>
+                        <p style="color: #666; font-size: 14px;">vs Academia Central</p>
+                        <p style="color: #999; font-size: 12px;">Mañana 15:00 - Cancha Sur</p>
+                        <button class="btn btn-small btn-primary" style="width: auto; margin-top: 8px;" onclick="goTo('P-14')">Ver Detalles</button>
+                    </div>
+                    <div class="card">
+                        <h3>Entrenamientos</h3>
+                        <p style="color: #666; font-size: 14px;">Sesión hoy: 17:00 - 18:30</p>
+                        <button class="btn btn-small btn-primary" style="width: auto; margin-top: 8px;" onclick="goTo('P-12')">Gestionar</button>
+                    </div>
+                    <h3 style="margin-top: 24px;">Acciones Rápidas</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="goTo('P-07')">📋 Equipos</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-11')">🏋️ Entrenamientos</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-14')">⚽ Partidos</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-22')">📢 Anuncios</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-04: Home Jugador -->
+            <div class="screen" id="P-04">
+                <div class="header">
+                    <h1>Mi Perfil</h1>
+                    <div class="header-subtitle">Jugador de Sub-15</div>
+                </div>
+                <div class="content">
+                    <div style="text-align: center; margin-bottom: 16px;">
+                        <div style="width: 60px; height: 60px; background: #ddd; border-radius: 50%; margin: 0 auto 8px;"></div>
+                        <h3>Carlos Mendoza</h3>
+                        <p style="color: #666; font-size: 14px;">Delantero | Sub-15</p>
+                    </div>
+                    <div class="card">
+                        <h3>Próxima Convocatoria</h3>
+                        <p style="color: #666; font-size: 14px;">vs Academia Central</p>
+                        <p style="color: #999; font-size: 12px;">Mañana 15:00</p>
+                        <button class="btn btn-small btn-primary" style="width: auto; margin-top: 8px;" onclick="goTo('P-15')">Confirmar</button>
+                    </div>
+                    <h3 style="margin-top: 16px;">Mis Estadísticas</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value">5</div>
+                            <div class="stat-label">Goles</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">12</div>
+                            <div class="stat-label">Partidos</div>
+                        </div>
+                    </div>
+                    <h3 style="margin-top: 16px;">Acciones Rápidas</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="goTo('P-09')">👤 Perfil</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-13')">📊 Asistencia</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-21')">📈 Estadísticas</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-24')">🔔 Notificaciones</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-25')">💬 Comunidad</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-05')">👨‍👩‍👧‍👦 Familia</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-05: Home Padre -->
+            <div class="screen" id="P-05">
+                <div class="header">
+                    <h1>Mis Hijos</h1>
+                    <div class="header-subtitle">Padre de Familia</div>
+                </div>
+                <div class="content">
+                    <div class="card">
+                        <h3>Carlos Mendoza (Sub-15)</h3>
+                        <p style="color: #999; font-size: 12px;">Delantero</p>
+                        <div style="margin-top: 8px;">
+                            <span class="badge badge-success">Asistencia: 90%</span>
+                        </div>
+                        <button class="btn btn-small btn-primary" style="width: auto; margin-top: 8px;" onclick="goTo('P-09')">Ver Perfil</button>
+                    </div>
+                    <h3 style="margin-top: 16px;">Próximos Eventos</h3>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Entrenamiento</div>
+                            <div class="list-item-subtitle">Hoy 17:00 - Academia</div>
+                        </div>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Partido</div>
+                            <div class="list-item-subtitle">Mañana 15:00 - Cancha Sur</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-06: Home Admin -->
+            <div class="screen" id="P-06">
+                <div class="header">
+                    <h1>Panel Admin</h1>
+                    <div class="header-subtitle">Administrador</div>
+                </div>
+                <div class="content">
+                    <h3>Estadísticas</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value">45</div>
+                            <div class="stat-label">Jugadores</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">3</div>
+                            <div class="stat-label">Equipos</div>
+                        </div>
+                    </div>
+                    <h3 style="margin-top: 16px;">Gestión</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="goTo('P-07')">👥 Usuarios</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-07')">📋 Equipos</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-28')">🛡️ Moderación</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-22')">📢 Anuncios</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-07: Equipos -->
+            <div class="screen" id="P-07">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-03')">←</button>
+                    <h1>Equipos</h1>
+                </div>
+                <div class="content">
+                    <button class="btn btn-primary" style="margin-bottom: 16px;" onclick="goTo('P-07a')">+ Crear Equipo</button>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Sub-15</div>
+                            <div class="list-item-subtitle">12 jugadores</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Sub-10</div>
+                            <div class="list-item-subtitle">10 jugadores</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Primera</div>
+                            <div class="list-item-subtitle">18 jugadores</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-07a: Crear Equipo -->
+            <div class="screen" id="P-07a">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-07')">←</button>
+                    <h1>Crear Equipo</h1>
+                </div>
+                <div class="content">
+                    <div class="form-group">
+                        <label>Nombre del Equipo</label>
+                        <input type="text" placeholder="Ej: Sub-15 A">
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select>
+                            <option>Sub-10</option>
+                            <option>Sub-15</option>
+                            <option>Primera</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción</label>
+                        <textarea placeholder="Descripción del equipo"></textarea>
+                    </div>
+                    <div class="footer">
+                        <button class="btn btn-primary" onclick="goTo('P-07')">Crear</button>
+                        <button class="btn btn-secondary" onclick="goTo('P-07')">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-08: Jugadores del Equipo -->
+            <div class="screen" id="P-08">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-07')">←</button>
+                    <h1>Jugadores (Sub-15)</h1>
+                </div>
+                <div class="content">
+                    <button class="btn btn-primary" style="margin-bottom: 16px;" onclick="goTo('P-14a')">+ Agregar Jugador</button>
+                    <div class="list-item" onclick="goTo('P-09')">
+                        <div>
+                            <div class="list-item-title">Carlos Mendoza</div>
+                            <div class="list-item-subtitle">Delantero</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div class="list-item" onclick="goTo('P-09')">
+                        <div>
+                            <div class="list-item-title">Diego Salazar</div>
+                            <div class="list-item-subtitle">Mediocampista</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div class="list-item" onclick="goTo('P-09')">
+                        <div>
+                            <div class="list-item-title">Juan García</div>
+                            <div class="list-item-subtitle">Defensa</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-09: Perfil Jugador -->
+            <div class="screen" id="P-09">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-08')">←</button>
+                    <h1>Perfil de Jugador</h1>
+                </div>
+                <div class="content">
+                    <div style="text-align: center; margin-bottom: 16px;">
+                        <div style="width: 80px; height: 80px; background: #ddd; border-radius: 50%; margin: 0 auto 8px;"></div>
+                        <h2>Carlos Mendoza</h2>
+                    </div>
+                    <div class="card">
+                        <strong>Información Básica</strong>
+                        <p style="margin-top: 8px; font-size: 14px;">
+                            <strong>Posición:</strong> Delantero<br>
+                            <strong>Edad:</strong> 14 años<br>
+                            <strong>Altura:</strong> 175 cm<br>
+                            <strong>Peso:</strong> 68 kg<br>
+                            <strong>Dorsal:</strong> 9
+                        </p>
+                    </div>
+                    <div class="card">
+                        <strong>Contacto</strong>
+                        <p style="margin-top: 8px; font-size: 14px;">
+                            <strong>Email:</strong> carlos@email.com<br>
+                            <strong>Teléfono:</strong> 999-123456<br>
+                            <strong>Emergencia:</strong> María (Madre) 999-654321
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showAlert('Perfil actualizado')">Editar Perfil</button>
+                </div>
+            </div>
+
+            <!-- P-11: Entrenamientos -->
+            <div class="screen" id="P-11">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-03')">←</button>
+                    <h1>Entrenamientos</h1>
+                </div>
+                <div class="content">
+                    <button class="btn btn-primary" style="margin-bottom: 16px;" onclick="goTo('P-11a')">+ Planificar Sesión</button>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Sesión Táctica</div>
+                            <div class="list-item-subtitle">Hoy 17:00 - 18:30</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Condición Física</div>
+                            <div class="list-item-subtitle">Mañana 16:00 - 17:00</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div style="margin-top: 16px; padding: 12px; background: #f0f0f0; border-radius: 6px;">
+                        <p><span class="link" onclick="goTo('P-11b')">Ver Librería de Ejercicios</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-11a: Planificar Sesión -->
+            <div class="screen" id="P-11a">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-11')">←</button>
+                    <h1>Planificar Sesión</h1>
+                </div>
+                <div class="content">
+                    <div class="form-group">
+                        <label>Equipo</label>
+                        <select>
+                            <option>Sub-15</option>
+                            <option>Sub-10</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha</label>
+                        <input type="date">
+                    </div>
+                    <div class="form-group">
+                        <label>Hora Inicio</label>
+                        <input type="time">
+                    </div>
+                    <div class="form-group">
+                        <label>Duración (minutos)</label>
+                        <input type="number" value="90">
+                    </div>
+                    <div class="form-group">
+                        <label>Objetivo</label>
+                        <textarea placeholder="Mejora de pases, trabajo táctico, etc."></textarea>
+                    </div>
+                    <div class="footer">
+                        <button class="btn btn-primary" onclick="goTo('P-11')">Crear</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-11b: Librería Ejercicios -->
+            <div class="screen" id="P-11b">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-11')">←</button>
+                    <h1>Librería de Ejercicios</h1>
+                </div>
+                <div class="content">
+                    <button class="btn btn-primary" style="margin-bottom: 16px;" onclick="goTo('P-14a')">+ Agregar Ejercicio</button>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Posesión 4x4</div>
+                            <div class="list-item-subtitle">Técnica • 15 min</div>
+                        </div>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Sprints de 20m</div>
+                            <div class="list-item-subtitle">Resistencia • 10 min</div>
+                        </div>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Juego en Espacio Reducido</div>
+                            <div class="list-item-subtitle">Táctica • 20 min</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-12: Registrar Asistencia -->
+            <div class="screen" id="P-12">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-11')">←</button>
+                    <h1>Registrar Asistencia</h1>
+                </div>
+                <div class="content">
+                    <p style="color: #666; margin-bottom: 16px;">Sesión Táctica - Hoy 17:00</p>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Carlos Mendoza</div>
+                        </div>
+                        <select style="width: 100px;">
+                            <option value="present">Presente</option>
+                            <option value="absent">Ausente</option>
+                            <option value="justified">Justificado</option>
+                        </select>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Diego Salazar</div>
+                        </div>
+                        <select style="width: 100px;">
+                            <option value="present">Presente</option>
+                            <option value="absent">Ausente</option>
+                            <option value="justified">Justificado</option>
+                        </select>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Juan García</div>
+                        </div>
+                        <select style="width: 100px;">
+                            <option value="present" selected>Presente</option>
+                            <option value="absent">Ausente</option>
+                            <option value="justified">Justificado</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" style="margin-top: 16px;" onclick="showAlert('Asistencia registrada')">Guardar Asistencia</button>
+                </div>
+            </div>
+
+            <!-- P-13: Historial Asistencia -->
+            <div class="screen" id="P-13">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-04')">←</button>
+                    <h1>Mi Asistencia</h1>
+                </div>
+                <div class="content">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value">9/10</div>
+                            <div class="stat-label">Asistencias</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">90%</div>
+                            <div class="stat-label">Porcentaje</div>
+                        </div>
+                    </div>
+                    <h3 style="margin-top: 16px;">Historial</h3>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Sesión Táctica</div>
+                            <div class="list-item-subtitle">Hoy - Presente</div>
+                        </div>
+                        <span class="badge badge-success">✓</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Condición Física</div>
+                            <div class="list-item-subtitle">Ayer - Presente</div>
+                        </div>
+                        <span class="badge badge-success">✓</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Sesión Técnica</div>
+                            <div class="list-item-subtitle">Lunes - Ausente</div>
+                        </div>
+                        <span class="badge badge-danger">✗</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-14: Partidos -->
+            <div class="screen" id="P-14">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-03')">←</button>
+                    <h1>Partidos</h1>
+                </div>
+                <div class="content">
+                    <button class="btn btn-primary" style="margin-bottom: 16px;" onclick="goTo(\'P-14a\')">+ Nueva Convocatoria</button>
+                    <div class="list-item" onclick="goTo('P-14b')">
+                        <div>
+                            <div class="list-item-title">vs Academia Central</div>
+                            <div class="list-item-subtitle">Mañana 15:00 - Cancha Sur</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">vs Academia del Oeste</div>
+                            <div class="list-item-subtitle">Sábado 16:00 - Cancha Norte</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-14a: Nueva Convocatoria -->
+            <div class="screen" id="P-14a">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-14')">←</button>
+                    <h1>Nueva Convocatoria</h1>
+                </div>
+                <div class="content">
+                    <div class="form-group">
+                        <label>Equipo</label>
+                        <select>
+                            <option>Sub-15</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Rival</label>
+                        <input type="text" placeholder="Academia Central">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha y Hora</label>
+                        <input type="datetime-local">
+                    </div>
+                    <div class="form-group">
+                        <label>Ubicación</label>
+                        <input type="text" placeholder="Cancha Sur">
+                    </div>
+                    <button class="btn btn-primary" onclick="goTo('P-14')">Convocar</button>
+                </div>
+            </div>
+
+            <!-- P-14b: Estado Convocatoria -->
+            <div class="screen" id="P-14b">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-14')">←</button>
+                    <h1>Convocatoria: vs Central</h1>
+                </div>
+                <div class="content">
+                    <div class="card">
+                        <p style="color: #999; font-size: 12px;">Mañana 15:00 - Cancha Sur</p>
+                    </div>
+                    <h3>Confirmados (10/12)</h3>
+                    <div class="list-item">
+                        <div>Carlos Mendoza</div>
+                        <span class="badge badge-success">✓</span>
+                    </div>
+                    <div class="list-item">
+                        <div>Diego Salazar</div>
+                        <span class="badge badge-success">✓</span>
+                    </div>
+                    <h3 style="margin-top: 16px;">Pendientes (2/12)</h3>
+                    <div class="list-item">
+                        <div>Juan García</div>
+                        <span style="color: #999;">Pendiente</span>
+                    </div>
+                    <div class="list-item">
+                        <div>Luis Fernández</div>
+                        <span style="color: #999;">Pendiente</span>
+                    </div>
+                    <button class="btn btn-primary" style="margin-top: 16px;" onclick="goTo('P-16')">Crear Alineación</button>
+                </div>
+            </div>
+
+            <!-- P-15: Confirmar Disponibilidad -->
+            <div class="screen" id="P-15">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-04')">←</button>
+                    <h1>Mis Convocatorias</h1>
+                </div>
+                <div class="content">
+                    <div class="card">
+                        <h3>vs Academia Central</h3>
+                        <p style="color: #666; font-size: 14px;">Mañana 15:00</p>
+                        <p style="color: #999; font-size: 12px;">Cancha Sur</p>
+                        <div style="margin-top: 12px; display: flex; gap: 8px;">
+                            <button class="btn btn-small btn-primary" style="flex: 1;" onclick="showAlert('¡Confirmado tu asistencia!')">Confirmo</button>
+                            <button class="btn btn-small btn-secondary" style="flex: 1;">No puedo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-16: Crear Alineación -->
+            <div class="screen" id="P-16">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-14b')">←</button>
+                    <h1>Alineación (4-3-3)</h1>
+                </div>
+                <div class="content">
+                    <div class="field-lineup">
+                        CANCHA<br><br>
+                        <div style="margin: 8px 0;">CF CF</div>
+                        <div style="margin: 8px 0;">MF MF MF</div>
+                        <div style="margin: 8px 0;">DF DF DF DF</div>
+                        <div style="margin: 8px 0;">GK</div>
+                    </div>
+                    <h3>Titulares Disponibles</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <span class="lineup-position">CM</span>
+                        <span class="lineup-position">FW</span>
+                        <span class="lineup-position">DEF</span>
+                        <span class="lineup-position">CM</span>
+                        <span class="lineup-position">FW</span>
+                    </div>
+                    <h3 style="margin-top: 16px;">Suplentes</h3>
+                    <div class="list-item">
+                        <div>Juan García</div>
+                        <span>Defensa</span>
+                    </div>
+                    <div class="list-item">
+                        <div>Luis Fernández</div>
+                        <span>Mediocampista</span>
+                    </div>
+                    <button class="btn btn-primary" style="margin-top: 16px;" onclick="goTo('P-17')">Guardar Alineación</button>
+                </div>
+            </div>
+
+            <!-- P-17: Ver Alineación -->
+            <div class="screen" id="P-17">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-04')">←</button>
+                    <h1>Alineación</h1>
+                </div>
+                <div class="content">
+                    <p style="color: #666; margin-bottom: 16px;">vs Academia Central - Mañana 15:00</p>
+                    <div class="field-lineup">
+                        <strong>ALINEACIÓN (4-3-3)</strong><br><br>
+                        CF: Mendoza (9) | FW: Rojas (7)<br>
+                        MF: Salazar | MF: Castillo | MF: Vargas<br>
+                        DF: García | DF: López | DF: Reyes | DF: Flores<br>
+                        GK: Rodríguez (1)
+                    </div>
+                    <h3>Suplentes</h3>
+                    <div class="list-item">
+                        <div>Fernández (Mediocampista)</div>
+                    </div>
+                    <div class="list-item">
+                        <div>Quispe (Defensa)</div>
+                    </div>
+                    <button class="btn btn-primary" style="margin-top: 16px;" onclick="goTo('P-18')">Iniciar Registro de Partido</button>
+                </div>
+            </div>
+
+            <!-- P-18: Registrar Evento de Partido -->
+            <div class="screen" id="P-18">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-14b')">←</button>
+                    <h1>Partido en Vivo</h1>
+                </div>
+                <div class="content">
+                    <div class="match-scoreboard">
+                        <div class="team-name">SportPro vs Central</div>
+                        <div class="score">2 - 1</div>
+                        <div style="font-size: 14px; color: #666;">Minuto 65</div>
+                    </div>
+                    <h3>Registrar Evento</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                        <button class="btn btn-small btn-secondary">⚽ Gol</button>
+                        <button class="btn btn-small btn-secondary">🟨 Tarjeta</button>
+                        <button class="btn btn-small btn-secondary">👥 Cambio</button>
+                        <button class="btn btn-small btn-secondary">⚠️ Falta</button>
+                        <button class="btn btn-small btn-secondary">🔄 Saque</button>
+                        <button class="btn btn-small btn-secondary">🎯 Penal</button>
+                    </div>
+                    <h3>Eventos Registrados</h3>
+                    <div class="event-item">
+                        <div class="event-time">45'</div>
+                        <div class="event-content">
+                            <strong>Gol</strong>
+                            <div class="event-type">Mendoza (SportPro)</div>
+                        </div>
+                    </div>
+                    <div class="event-item">
+                        <div class="event-time">32'</div>
+                        <div class="event-content">
+                            <strong>Tarjeta Amarilla</strong>
+                            <div class="event-type">García (SportPro)</div>
+                        </div>
+                    </div>
+                    <div class="event-item">
+                        <div class="event-time">15'</div>
+                        <div class="event-content">
+                            <strong>Gol</strong>
+                            <div class="event-type">Vargas (SportPro)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-19: Ver Partido en Vivo -->
+            <div class="screen" id="P-19">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-14')">←</button>
+                    <h1>SportPro vs Central</h1><div class="content"><button class="btn btn-primary" onclick="goTo(\'P-20\')">Ver Resumen IA</button></div>
+                </div>
+                <div class="content">
+                    <div class="match-scoreboard">
+                        <div class="team-name">Mañana 15:00</div>
+                        <div class="score">2 - 1</div>
+                        <div style="font-size: 12px; color: #999;">EN VIVO • Minuto 65</div>
+                    </div>
+                    <h3>Timeline de Eventos</h3>
+                    <div class="timeline">
+                        <div class="event-item">
+                            <div class="event-time">65'</div>
+                            <div class="event-content">
+                                <strong>⚽ Gol</strong>
+                                <div style="font-size: 13px;">Mendoza (SportPro)</div>
+                            </div>
+                        </div>
+                        <div class="event-item">
+                            <div class="event-time">45'</div>
+                            <div class="event-content">
+                                <strong>👥 Cambio</strong>
+                                <div style="font-size: 13px;">Salazar sale → García entra</div>
+                            </div>
+                        </div>
+                        <div class="event-item">
+                            <div class="event-time">32'</div>
+                            <div class="event-content">
+                                <strong>⚽ Gol</strong>
+                                <div style="font-size: 13px;">Vargas (SportPro)</div>
+                            </div>
+                        </div>
+                        <div class="event-item">
+                            <div class="event-time">0'</div>
+                            <div class="event-content">
+                                <strong>Inicio del Partido</strong>
+                                <div style="font-size: 13px;">0 - 0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" style="margin-top: 16px;" onclick="goTo('P-20')">Ver Resumen IA</button>
+                </div>
+            </div>
+
+            <!-- P-20: Revisar Resumen IA -->
+            <div class="screen" id="P-20">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-19')">←</button>
+                    <h1>Resumen del Partido</h1>
+                </div>
+                <div class="content">
+                    <h3>Generado por IA</h3>
+                    <div class="card">
+                        <p style="font-size: 14px; line-height: 1.6;">
+                            SportPro logró una victoria 2-1 contra Central. El partido fue intenso desde el inicio, con ambos equipos buscando dominar el juego. En el minuto 32, Vargas abrió el marcador con un gol que puso en ventaja a SportPro. Central reaccionó pero los defensas se mantuvieron firmes. En el minuto 45, Mendoza amplió la ventaja con un segundo gol. Central descontó en el segundo tiempo, pero SportPro defendió bien en los últimos minutos asegurando la victoria.
+                        </p>
+                    </div>
+                    <h3 style="margin-top: 16px;">Acciones</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button class="btn btn-small btn-primary" style="width: 100%;" onclick="showAlert('Resumen aprobado')">✓ Aprobar</button>
+                        <button class="btn btn-small btn-secondary" style="width: 100%;">Editar</button>
+                    </div>
+                    <button class="btn btn-secondary" style="margin-top: 12px;">Rechazar</button>
+                </div>
+            </div>
+
+            <!-- P-21: Estadísticas -->
+            <div class="screen" id="P-21">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-04')">←</button>
+                    <h1>Mis Estadísticas</h1>
+                </div>
+                <div class="content">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value">5</div>
+                            <div class="stat-label">Goles</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">12</div>
+                            <div class="stat-label">Partidos</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">1</div>
+                            <div class="stat-label">Tarjetas</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">92%</div>
+                            <div class="stat-label">Asistencia</div>
+                        </div>
+                    </div>
+                    <h3 style="margin-top: 16px;">Historial de Goles</h3>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">vs Central</div>
+                            <div class="list-item-subtitle">Minuto 65 - 2 goles</div>
+                        </div>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">vs Oeste</div>
+                            <div class="list-item-subtitle">Minuto 20 - 1 gol</div>
+                        </div>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">vs Norte</div>
+                            <div class="list-item-subtitle">Minuto 78 - 2 goles</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-22: Anuncios -->
+            <div class="screen" id="P-22">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-03')">←</button>
+                    <h1>Anuncios</h1>
+                </div>
+                <div class="content">
+                    <button class="btn btn-primary" style="margin-bottom: 16px;" onclick="goTo('P-22a')">+ Crear Anuncio</button>
+                    <div class="card">
+                        <h3>Suspensión de Entrenamiento</h3>
+                        <p style="color: #666; font-size: 14px; margin-top: 4px;">La sesión de hoy está suspendida por lluvia. Será reprogramada para mañana.</p>
+                        <p style="color: #999; font-size: 12px; margin-top: 8px;">Hace 2 horas</p>
+                    </div>
+                    <div class="card">
+                        <h3>Cambio de Horario</h3>
+                        <p style="color: #666; font-size: 14px; margin-top: 4px;">El próximo partido se ha movido a las 16:00 en lugar de las 15:00.</p>
+                        <p style="color: #999; font-size: 12px; margin-top: 8px;">Hace 1 día</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-22a: Crear Anuncio -->
+            <div class="screen" id="P-22a">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-22')">←</button>
+                    <h1>Crear Anuncio</h1>
+                </div>
+                <div class="content">
+                    <div class="form-group">
+                        <label>Título</label>
+                        <input type="text" placeholder="Ej: Cambio de horario">
+                    </div>
+                    <div class="form-group">
+                        <label>Contenido</label>
+                        <textarea placeholder="Escribe el anuncio..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Destino</label>
+                        <select>
+                            <option>Toda la Academia</option>
+                            <option>Sub-15</option>
+                            <option>Sub-10</option>
+                        </select>
+                    </div>
+                    <div class="footer">
+                        <button class="btn btn-primary" onclick="goTo('P-22')">Publicar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-24: Notificaciones -->
+            <div class="screen" id="P-24">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-04')">←</button>
+                    <h1>Notificaciones</h1>
+                </div>
+                <div class="content">
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Convocatoria para partido</div>
+                            <div class="list-item-subtitle">vs Academia Central - Mañana 15:00</div>
+                        </div>
+                        <span style="color: #667eea;">🔔</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Alineación publicada</div>
+                            <div class="list-item-subtitle">Eres titular en la posición de FW</div>
+                        </div>
+                        <span style="color: #999;">✓</span>
+                    </div>
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">Suspensión de entrenamiento</div>
+                            <div class="list-item-subtitle">Sesión de hoy cancelada por lluvia</div>
+                        </div>
+                        <span style="color: #999;">✓</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-25: Comunidad -->
+            <div class="screen" id="P-25">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-04')">←</button>
+                    <h1>Comunidad</h1>
+                </div>
+                <div class="content">
+                    <button class="btn btn-primary" style="margin-bottom: 16px;" <button class="btn btn-primary" style="margin-bottom: 16px;" onclick="goTo('P-25a')">+ Crear Post</button>
+                    <button class="btn btn-secondary" onclick="goTo('P-26')">Avisos de Prueba →</button>
+                    <div class="card">
+                        <h3>Carlos Mendoza</h3>
+                        <p style="color: #999; font-size: 12px;">Hace 2 horas</p>
+                        <p style="color: #666; margin-top: 8px;">¡Qué partido! Feliz con los goles hoy. Gracias al equipo por el apoyo. 🎉</p>
+                        <div class="reaction-buttons">
+                            <button class="reaction-btn">👍</button>
+                            <button class="reaction-btn">❤️</button>
+                            <button class="reaction-btn">😂</button>
+                        </div>
+                        <div class="social-stats">
+                            <div class="social-stat">12 reacciones</div>
+                            <div class="social-stat">3 comentarios</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Academia Deportiva</h3>
+                        <p style="color: #999; font-size: 12px;">Hace 1 día</p>
+                        <p style="color: #666; margin-top: 8px;">Resumen de partidos: 2-1 vs Central, 3-0 vs Oeste. ¡Excelente semana! 🏆</p>
+                        <div class="reaction-buttons">
+                            <button class="reaction-btn">👍</button>
+                            <button class="reaction-btn">🎉</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-25a: Crear Post -->
+            <div class="screen" id="P-25a">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-25')">←</button>
+                    <h1>Crear Post</h1>
+                </div>
+                <div class="content">
+                    <div class="form-group">
+                        <label>¿Qué deseas compartir?</label>
+                        <textarea placeholder="Escribe tu post aquí..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Audiencia</label>
+                        <select>
+                            <option>Academia</option>
+                            <option>Mi Equipo</option>
+                            <option>Público</option>
+                        </select>
+                    </div>
+                    <div class="footer">
+                        <button class="btn btn-primary" onclick="goTo('P-25')">Publicar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-26: Avisos de Prueba -->
+            <div class="screen" id="P-26">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-04')">←</button>
+                    <h1>Avisos de Prueba</h1>
+                </div>
+                <div class="content">
+                    <div style="margin-bottom: 16px;">
+                        <input type="text" placeholder="🔍 Buscar por categoría, posición...">
+                    </div>
+                    <div class="list-item" onclick="goTo('P-26b')">
+                        <div>
+                            <div class="list-item-title">Búsqueda de Delanteros</div>
+                            <div class="list-item-subtitle">Academia Nacional • Sub-15</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                    <div class="list-item" onclick="goTo('P-26b')">
+                        <div>
+                            <div class="list-item-title">Prueba de Porteros</div>
+                            <div class="list-item-subtitle">Club Alianza • Primera</div>
+                        </div>
+                        <span>→</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P-26b: Detalle Aviso Prueba -->
+            <div class="screen" id="P-26b">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-27')">←</button>
+                    <h1>Aviso de Prueba</h1>
+                </div>
+                <div class="content">
+                    <h2 style="color: #333;">Búsqueda de Delanteros</h2>
+                    <p style="color: #666; font-size: 14px; margin-top: 4px;">Academia Nacional</p>
+                    <div class="card">
+                        <strong>Categoría:</strong> Sub-15<br>
+                        <strong>Posiciones:</strong> Delantero, Extremo<br>
+                        <strong>Fecha de Prueba:</strong> Sábado 25 de Octubre<br>
+                        <strong>Ubicación:</strong> Cancha Sur, Academia Nacional<br>
+                        <strong>Contacto:</strong> (555) 123-4567
+                    </div>
+                    <p style="color: #666; font-size: 14px; margin-top: 12px;">
+                        Buscamos delanteros talentosos para reforzar nuestro equipo de sub-15. Se evaluará técnica, velocidad y posicionamiento.
+                    </p>
+                    <button class="btn btn-primary" style="margin-top: 16px;" onclick="showAlert('Interés registrado')">Mostrar Interés</button>
+                </div>
+            </div>
+
+            <!-- P-27: Reportar Contenido -->
+            <div class="screen" id="P-27">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-25')">←</button>
+                    <h1>Reportar Contenido</h1>
+                </div>
+                <div class="content">
+                    <h3>¿Por qué reportas este contenido?</h3>
+                    <div class="radio-group">
+                        <div class="radio-item">
+                            <input type="radio" name="reason" value="abusive" checked>
+                            <label>Lenguaje abusivo o acoso</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" name="reason" value="spam">
+                            <label>Spam o contenido duplicado</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" name="reason" value="fake">
+                            <label>Suplantación de identidad</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" name="reason" value="other">
+                            <label>Otro</label>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label>Detalles adicionales (opcional)</label>
+                        <textarea placeholder="Proporciona más información..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="goTo('P-25')">Enviar Reporte</button>
+                </div>
+            </div>
+
+            <!-- P-28: Centro de Moderación -->
+            <div class="screen" id="P-28">
+                <div class="header">
+                    <button class="btn-back" onclick="goTo('P-06')">←</button>
+                    <h1>Centro de Moderación</h1>
+                </div>
+                <div class="content">
+                    <div class="tabs">
+                        <div class="tab active">Pendientes (5)</div>
+                        <div class="tab">Resueltos</div>
+                    </div>
+                    <div class="tab-content active" style="padding: 16px;">
+                        <div class="card">
+                            <h3>Reporte de Post</h3>
+                            <p style="color: #666; font-size: 14px; margin-top: 4px;">Razón: Lenguaje abusivo</p>
+                            <p style="color: #999; font-size: 12px; margin-top: 8px;">Reportado por Carlos Mendoza</p>
+                            <div style="margin-top: 12px; display: flex; gap: 8px;">
+                                <button class="btn btn-small btn-primary" style="flex: 1;">Ocultar</button>
+                                <button class="btn btn-small btn-secondary" style="flex: 1;">Desestimar</button>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>Reporte de Comentario</h3>
+                            <p style="color: #666; font-size: 14px; margin-top: 4px;">Razón: Acoso</p>
+                            <p style="color: #999; font-size: 12px; margin-top: 8px;">Reportado por Diego Salazar</p>
+                            <div style="margin-top: 12px; display: flex; gap: 8px;">
+                                <button class="btn btn-small btn-primary" style="flex: 1;">Bloquear Usuario</button>
+                                <button class="btn btn-small btn-secondary" style="flex: 1;">Desestimar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function goTo(screenId) {
+            // Hide all screens
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            // Show target screen
+            const targetScreen = document.getElementById(screenId);
+            if (targetScreen) {
+                targetScreen.classList.add('active');
+            }
+        }
+
+        function showAlert(message) {
+            alert(message);
+        }
+    </script>
+</body>
+</html>

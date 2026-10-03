@@ -1,0 +1,531 @@
+"Title","Body","Labels","Story Points"
+"US-01: Registro de Usuario por Rol","**Rol:** Cualquier usuario
+**Puntos:** 8
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como usuario deseo registrarme en SportPro seleccionando mi rol (Entrenador, Jugador, Padre o Administrador) con la finalidad de acceder a funcionalidades específicas según mi rol.
+
+**Criterios de Aceptación:**
+- Usuario accede a pantalla de registro (P-01)
+- Debe ingresar: nombre, email, contraseña (mínimo 8 caracteres), confirmación
+- Debe seleccionar rol: DT, Jugador, Padre, Admin
+- Sistema valida email único
+- Se almacena en Firebase Authentication
+- Documento en users/{uid}
+- Confirmación de registro exitoso
+- Redirige a login o home
+
+**Prototipo:** P-01","backend,authentication",8
+"US-02: Inicio de Sesión y Autenticación","**Rol:** Cualquier usuario
+**Puntos:** 5
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como usuario registrado deseo iniciar sesión con mi correo y contraseña con la finalidad de acceder a mi cuenta y ver el home según mi rol.
+
+**Criterios de Aceptación:**
+- Pantalla de login solicita correo y contraseña
+- Valida contra Firebase Authentication
+- Redirige a home según rol (DT → P-03, Jugador → P-04, etc.)
+- Sesión persiste al cerrar app
+- Logout limpia sesión
+
+**Prototipo:** P-02","backend,authentication",5
+"US-03: Recuperación de Contraseña","**Rol:** Cualquier usuario
+**Puntos:** 3
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como usuario olvidé mi contraseña deseo poder recuperarla mediante un correo de restablecimiento.
+
+**Criterios de Aceptación:**
+- Desde pantalla login, botón Olvidé mi contraseña
+- Usuario ingresa email registrado
+- Se envía correo de restablecimiento via Firebase
+- Link en correo abre app con token válido
+- Usuario ingresa nueva contraseña
+- Se actualiza en Firebase Authentication
+
+**Prototipo:** P-02a","backend,authentication",3
+"US-04: Crear y Gestionar Equipo","**Rol:** Administrador / Entrenador
+**Puntos:** 8
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como administrador o entrenador deseo crear y gestionar un equipo con categoría, nombre y datos básicos con la finalidad de organizar jugadores por categoría.
+
+**Criterios de Aceptación:**
+- Admin/DT accede a sección Equipos en home
+- Botón Crear Equipo abre formulario
+- Formulario solicita: nombre, categoría (dropdown), descripción, año/ciclo
+- Se registra en academies/{uid}/teams/{teamId}
+- Se muestra lista de equipos creados
+- Permite editar datos y agregar/remover jugadores
+- Confirmación de cambios guarda en Firestore
+
+**Prototipo:** P-07, P-07a, P-07b","backend,teams",8
+"US-05: Registrar Jugador en Equipo","**Rol:** Administrador / Entrenador
+**Puntos:** 5
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como entrenador/admin deseo registrar un jugador en mi equipo con su información básica con la finalidad de gestionar la alineación, asistencia y convocatoria.
+
+**Criterios de Aceptación:**
+- DT/Admin abre equipo y selecciona Agregar Jugador
+- Opciones: crear nuevo usuario o buscar existente por email
+- Si crea nuevo: solicita nombre, email, fecha nacimiento, género
+- Se guarda relación en teams/{teamId}/players/{playerId}
+- Se muestra lista actualizada de jugadores
+- Cada jugador permite: ver perfil, editar posición, remover
+
+**Prototipo:** P-07b, P-08","backend,players",5
+"US-06: Ver y Editar Perfil de Jugador","**Rol:** Jugador / Entrenador / Padre
+**Puntos:** 5
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como jugador deseo ver y editar mi perfil incluyendo posición, datos físicos, foto con la finalidad de mantener información actualizada.
+
+**Criterios de Aceptación:**
+- Jugador accede a su perfil desde home
+- Se muestra: nombre, email, fecha nacimiento, género, posición, altura, peso, foto
+- Botón Editar abre formulario editable
+- Foto se sube a Firebase Storage en users/{uid}/profile/photo
+- Cambios se guardan con updateTimestamp
+- Se muestra confirmación Perfil actualizado
+
+**Prototipo:** P-04, P-09","frontend,players",5
+"US-07: Registrar Contacto de Emergencia","**Rol:** Jugador / Padre
+**Puntos:** 3
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como jugador o padre deseo registrar un contacto de emergencia con nombre, teléfono, relación con la finalidad de que la academia pueda contactar en caso de necesidad.
+
+**Criterios de Aceptación:**
+- Jugador/Padre accede a sección Contacto de Emergencia
+- Formulario solicita: nombre, teléfono, relación (padre, madre, hermano, otro)
+- Se guarda en users/{uid}/emergencyContact
+- Visible para DT/Admin pero NO expuesto en comunidad pública
+- Se muestra confirmación Contacto guardado
+
+**Prototipo:** P-09","backend,players",3
+"US-08: Asignar Padre/Apoderado a Jugador","**Rol:** Administrador / Padre
+**Puntos:** 5
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como administrador o padre deseo asignarme como apoderado de un jugador (hijo) con la finalidad de supervisar su información y recibir notificaciones.
+
+**Criterios de Aceptación:**
+- Admin busca usuario tipo Padre en sección Usuarios
+- Padre completa registro seleccionando su(s) hijo(s) por email
+- Sistema valida que el hijo existe en BD
+- Se registra relación en guardians/{guardianId}/players
+- Padre puede acceder a: perfil de hijo, asistencias, convocatorias, estadísticas
+- Se envía confirmación Vínculo creado
+
+**Prototipo:** P-10","backend,players",5
+"US-09: Planificar Sesión de Entrenamiento","**Rol:** Entrenador / Administrador
+**Puntos:** 8
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como entrenador deseo planificar una sesión de entrenamiento con fecha, hora, duración y ejercicios asignados con la finalidad de organizar los entrenamientos del equipo.
+
+**Criterios de Aceptación:**
+- DT accede a Entrenamientos desde home
+- Botón Planificar Sesión abre formulario
+- Campos: equipo (dropdown), fecha, hora inicio, duración, objetivo, notas
+- DT selecciona ejercicios de librería o crea nuevos
+- Se guarda en trainingSessions/{sessionId}
+- Se muestra lista de sesiones planificadas
+- Notificación automática a jugadores 24h antes
+- DT puede editar sesión si no ha comenzado
+
+**Prototipo:** P-11, P-11a","backend,trainings",8
+"US-10: Agregar Ejercicios a Librería Reutilizable","**Rol:** Entrenador / Administrador
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como entrenador deseo agregar ejercicios a una librería reutilizable con la finalidad de no reingresar los mismos ejercicios en cada sesión.
+
+**Criterios de Aceptación:**
+- DT accede a Librería de Ejercicios
+- Botón Agregar Ejercicio abre formulario
+- Campos: nombre, descripción, duración, objetivo (fuerza, resistencia, técnica, etc.), imagen/video, notas
+- Se guarda en exerciseLibrary/{academyId}/exercises/{exerciseId}
+- Se muestra lista de ejercicios creados
+- Cada ejercicio permite: editar, duplicar, eliminar
+- Librería compartida entre todos los DT de la academia
+
+**Prototipo:** P-11b, P-11c","backend,trainings",5
+"US-11: Registrar Asistencia a Entrenamiento","**Rol:** Entrenador
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como entrenador deseo registrar la asistencia y participación de cada jugador en el entrenamiento con la finalidad de llevar historial actualizado.
+
+**Criterios de Aceptación:**
+- DT abre sesión de entrenamiento iniciada
+- Se muestra lista de jugadores del equipo
+- Para cada jugador marca: Presente, Ausente, Justificado
+- Si Ausente/Justificado, campo de motivo (opcional)
+- Permite registrar participación: Completo, Parcial, No participó
+- Se guarda en trainingSessions/{sessionId}/attendance/{playerId}
+- Notificación opcional a padre si ausencia no justificada
+- DT puede corregir registro antes de cerrar sesión
+
+**Prototipo:** P-12","backend,trainings",5
+"US-12: Ver Historial de Asistencia","**Rol:** Jugador / Padre / Entrenador
+**Puntos:** 3
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como jugador o padre deseo ver el historial de asistencia a entrenamientos con la finalidad de conocer el desempeño en la participación.
+
+**Criterios de Aceptación:**
+- Jugador accede a Mi Asistencia
+- Se muestra tabla con: fecha, sesión, estado, participación, motivo (si aplica)
+- Filtros: mes, año, equipo
+- Se calcula: total sesiones, total asistencias, porcentaje asistencia
+- Padre puede ver historial de su hijo
+- DT puede ver historial de cualquier jugador del equipo
+
+**Prototipo:** P-13","frontend,trainings",3
+"US-13: Convocar Jugadores a Partido","**Rol:** Entrenador / Administrador
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como entrenador deseo convocar a jugadores específicos para un partido y solicitar confirmación de disponibilidad con la finalidad de conocer quién puede asistir.
+
+**Criterios de Aceptación:**
+- DT accede a Partidos y selecciona Nueva Convocatoria
+- Abre formulario: equipo, fecha/hora, rival, ubicación, categoría
+- DT selecciona jugadores a convocar (checkboxes)
+- Opción Convocar a todos
+- Se guarda en callups/{callupId}
+- Se envía notificación a cada jugador convocado
+- DT puede editar convocatoria si aún está abierta
+- Se muestra pantalla de resumen de convocatoria
+
+**Prototipo:** P-14, P-14a","backend,matches",5
+"US-14: Confirmar Disponibilidad para Partido","**Rol:** Jugador
+**Puntos:** 3
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como jugador convocado deseo confirmar o rechazar mi disponibilidad para el partido con la finalidad de que el entrenador sepa con quién cuenta.
+
+**Criterios de Aceptación:**
+- Jugador recibe notificación de convocatoria
+- Se muestra detalles: fecha/hora, rival, ubicación, categoría
+- Botones: Confirmo mi asistencia, No puedo asistir
+- Si no puede, campo opcional de motivo
+- Si padre debe autorizar (menor de edad), notificación al padre
+- Se actualiza callups/{callupId}/convocatedPlayers/{playerId}
+- Se muestra confirmación al jugador
+- DT ve estado de confirmaciones en tiempo real
+
+**Prototipo:** P-15, P-14b","frontend,matches",3
+"US-15: Crear Alineación (Titulares y Suplentes)","**Rol:** Entrenador
+**Puntos:** 8
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como entrenador deseo crear la alineación del partido definiendo titulares y suplentes con sus posiciones con la finalidad de organizar el equipo antes del partido.
+
+**Criterios de Aceptación:**
+- DT abre convocatoria confirmada y selecciona Crear Alineación
+- Se abre formulario visual con campo de fútbol (11 posiciones)
+- DT arrastra jugadores a posiciones o selecciona posición (validación: 1 portero, 4 defensas, etc.)
+- Campo Suplentes: lista de jugadores restantes en orden de preferencia
+- Se guarda en lineups/{lineupId}
+- Se muestra alineación final
+- Notificación a jugadores si son titular o suplente
+- DT puede editar alineación hasta 1 hora antes del partido
+
+**Prototipo:** P-16","frontend,matches",8
+"US-16: Ver Alineación como Jugador/Padre","**Rol:** Jugador / Padre / Público
+**Puntos:** 3
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como jugador o padre deseo ver la alineación oficial del partido con la finalidad de confirmar la posición del jugador.
+
+**Criterios de Aceptación:**
+- Jugador accede a Mi Próximo Partido o desde notificación
+- Se muestra campo visual con alineación: titulares en cancha, suplentes en banco
+- Muestra nombre, número (si aplica), posición de cada jugador
+- Destaca al jugador propio
+- Información: rival, fecha/hora, ubicación
+- Padre puede ver alineación de su hijo
+- Vista pública muestra solo nombres y posiciones
+- Alineación se actualiza en tiempo real si DT hace cambios
+
+**Prototipo:** P-17","frontend,matches",3
+"US-17: Registrar Evento de Partido en Tiempo Real","**Rol:** Entrenador / Operador Autorizado
+**Puntos:** 13
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como entrenador o operador autorizado deseo registrar eventos del partido en vivo (goles, faltas, cambios, tarjetas) con minuto exacto, equipo y jugador involucrado con la finalidad de mantener un registro completo y preciso.
+
+**Criterios de Aceptación:**
+- DT abre pantalla Partido en Vivo antes/durante partido
+- Cronómetro muestra minuto actual (manual o automático)
+- Botones de tipos de evento según catálogo (Gol, Tarjeta, Cambio, etc.)
+- Al seleccionar evento: solicita minuto (pre-lleno, editable), equipo, jugador, detalles específicos
+- Validación: jugador debe estar en alineación o haber ingresado como cambio
+- Se guarda en matches/{matchId}/events/{eventId}
+- Se muestra lista de eventos registrados en orden cronológico
+- Cada evento permite: editar, anular
+- Sincronización en tiempo real a todos los dispositivos (<2 segundos)
+- Sistema funciona offline: cola local, sincroniza al reconectar
+
+**Prototipo:** P-18","backend,matches",13
+"US-18: Corregir o Anular Evento de Partido","**Rol:** Entrenador / Operador Autorizado
+**Puntos:** 8
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como entrenador deseo corregir o anular un evento registrado erróneamente con la finalidad de mantener la precisión del registro y preservar la trazabilidad.
+
+**Criterios de Aceptación:**
+- Desde pantalla Partido en Vivo, DT selecciona evento de la lista
+- Opciones: Editar Evento o Anular Evento
+- Si Editar: abre formulario con campos pre-llenos, permite cambiar minuto, jugador, detalles
+- Al guardar: se actualiza evento con updatedBy, updatedAt, version (incrementa), se registra en changelog
+- Si Anular: diálogo solicita razón de anulación
+- Al confirmar: se actualiza evento con voided: true, voidedBy, voidedAt, voidReason
+- Evento anulado NO se elimina, sigue visible en timeline con indicación ANULADO
+- Cambios se sincronizan en tiempo real
+- Historial completo de cambios es auditable
+
+**Prototipo:** P-18","backend,matches",8
+"US-19: Ver Scoreboard y Timeline en Tiempo Real","**Rol:** Cualquier usuario conectado
+**Puntos:** 8
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como jugador, padre, o espectador deseo ver el marcador, cronología de eventos y estado del partido en vivo con la finalidad de seguir el partido en tiempo real sin necesidad de recargar.
+
+**Criterios de Aceptación:**
+- Pantalla Ver Partido en Vivo muestra:
+  - Scoreboard: equipos (local vs visitante), marcador actual, cronómetro, estado
+  - Timeline de eventos: lista en orden cronológico (de abajo hacia arriba)
+  - Goles destacados, tarjetas destacadas, cambios mostrados claramente
+- Sincronización en tiempo real: evento registrado aparece en <2 segundos en todos los dispositivos
+- Listener Firestore escucha matches/{matchId}/events y actualiza UI automáticamente
+- Si pérdida de conexión, se muestra estado offline y reintenta cada 5 segundos
+- Refresh manual con botón Actualizar
+- Responsive: se adapta a teléfono (timeline vertical) y tablet (scoreboard + timeline lado a lado)
+
+**Prototipo:** P-19","frontend,matches",8
+"US-20: Generar Resumen Narrativo de Partido con IA","**Rol:** Sistema (automatizado)
+**Puntos:** 13
+**Responsable:** 24100514 – Henry Aaron Tovar Landa
+
+**Descripción:**
+Como sistema deseo generar automáticamente un resumen narrativo del partido a partir de los eventos registrados con la finalidad de producir un reporte textual confiable basado solo en datos verificados.
+
+**Criterios de Aceptación:**
+- Al finalizar partido (evento Fin Partido registrado), se activa Cloud Function
+- Cloud Function lee eventos de matches/{matchId}/events donde voided = false
+- Extrae datos factales: goles, tarjetas, cambios, balance de posesión
+- Llama API externa (OpenAI/Claude) con prompt estructurado
+- Resumen se guarda en aiSummaries/{matchId} con status: draft
+- Se notifica al DT: Resumen IA generado. Revisa y aprueba
+- Si API falla, se registra error y se notifica a admin
+- Versionado: cada regeneración es una nueva entrada
+- Requisitos: Solo hechos verificables, NO inventar jugadas, separar hechos de interpretación, NO nombrar menores directamente, máximo 300 palabras
+
+**Prototipo:** backend (sin UI directa)","backend,ai-integration",13
+"US-21: Revisar y Aprobar Resumen IA","**Rol:** Entrenador
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como entrenador deseo revisar el resumen narrativo generado por IA, detectar errores o información inventada, y aprobarlo o solicitar corrección con la finalidad de garantizar precisión antes de publicar.
+
+**Criterios de Aceptación:**
+- DT accede a Resumen del Partido después de finalizar partido
+- Se muestra: resumen narrativo en texto editable, eventos fuente listados, indicación de párrafos que son hechos vs interpretación
+- Botones: Aprobar, Solicitar Corrección, Rechazar
+- Si Aprobar: status cambia a approved, se publica en comunidad
+- Si Solicitar Corrección: DT ingresa feedback específico, se registra en feedback collection
+- Si Rechazar: motivo (ej: Información inventada), resumen no se publica, admin puede regenerar
+- Permite editar directamente texto si hay errores menores
+- Se registra versión anterior en histórico
+
+**Prototipo:** P-20","frontend,ai-integration",5
+"US-22: Ver Estadísticas Acumuladas del Jugador","**Rol:** Jugador / Padre / Entrenador
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como jugador o padre deseo ver las estadísticas acumuladas de participación en partidos con la finalidad de conocer el desempeño (goles, tarjetas, participación).
+
+**Criterios de Aceptación:**
+- Jugador accede a Mis Estadísticas
+- Se muestra dashboard con: partidos jugados (totales y por categoría), goles marcados, tarjetas amarillas/rojas, partidos como titular vs suplente, participación
+- Filtros: equipo, categoría, período (mes/año/temporada)
+- Gráficos (opcional): línea de goles por mes, torta de participación
+- Padre puede ver estadísticas de su hijo
+- Datos se calculan dinámicamente desde matches/{matchId}/events y lineups/{lineupId}
+- Vista pública muestra solo nombre y goles/tarjetas sin datos sensibles
+
+**Prototipo:** P-21","frontend,statistics",5
+"US-23: Crear Anuncio de Academia","**Rol:** Administrador / Entrenador
+**Puntos:** 3
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como administrador o entrenador deseo crear anuncios (cambios de horario, suspensiones, eventos) con la finalidad de comunicar información importante a todos los usuarios.
+
+**Criterios de Aceptación:**
+- Admin/DT accede a Anuncios
+- Botón Crear Anuncio abre formulario
+- Campos: título, contenido, fecha publicación (hoy o programada), destino (toda academia, un equipo, grupo específico), adjunto (opcional)
+- Se guarda en announcements/{announcementId}
+- Se muestra lista de anuncios
+- Notificación automática a usuarios en audiencia (push + email)
+- Permite editar/eliminar anuncios no publicados
+- Anuncios publicados no se pueden eliminar (solo marcar como archivado)
+
+**Prototipo:** P-22, P-22a","backend,notifications",3
+"US-24: Recibir Notificaciones","**Rol:** Cualquier usuario
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como usuario deseo recibir notificaciones push y email sobre eventos relevantes (convocatoria, anuncios, cambios, resultados) con la finalidad de estar informado sin tener que revisar constantemente la app.
+
+**Criterios de Aceptación:**
+- Sistema configura Firebase Cloud Messaging (FCM) con token por dispositivo
+- Notificaciones se envían por: convocatoria, alineación, anuncios, recordatorio entrenamiento, cambios durante partido, resultado, asistencia/ausencia del hijo (padre)
+- Usuario puede configurar preferencias: on/off por tipo, horario no molestar
+- Notificaciones se guardan en centro de notificaciones con historial
+- Click en notificación abre detalle relevante
+- Notificaciones sin lectura se marcan con badge
+- Email resumen si usuario no abre app en X días
+
+**Prototipo:** P-24","backend,notifications",5
+"US-25: Crear Post en Comunidad","**Rol:** Entrenador / Jugador / Padre
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como entrenador, jugador o padre deseo crear posts en la comunidad para compartir experiencias, resultados, celebraciones con la finalidad de fomentar interacción entre miembros de la academia.
+
+**Criterios de Aceptación:**
+- Usuario accede a Comunidad
+- Botón Crear Post abre formulario
+- Campos: contenido (texto), foto/video (opcional), audiencia (academia, equipo, público si aplica)
+- Tags opcionales: #categoría, #evento, #jugador
+- Menciones: @usuario (autocompletar)
+- Se guarda en posts/{postId}
+- Se muestra en feed de comunidad en orden cronológico inverso
+- Validaciones: no permite contenido vacío, máximo 5000 caracteres, máximo 10 MB en media
+- Post se publica de inmediato (visible para audiencia indicada)
+- Autor puede editar post dentro de 1 hora (con indicación editado)
+
+**Prototipo:** P-25, P-25a","frontend,community",5
+"US-26: Comentar y Reaccionar a Post","**Rol:** Entrenador / Jugador / Padre
+**Puntos:** 3
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como usuario deseo comentar y reaccionar (emoji) a posts de otros usuarios con la finalidad de participar en conversación de comunidad.
+
+**Criterios de Aceptación:**
+- Cada post muestra: contador de reacciones, botón Reaccionar, botón Comentar, contador de comentarios
+- Reacciones: emoji buttons (👍, ❤️, 😂, 😮, 😢, 😡) o selector personalizado
+- Al reaccionar: se registra en posts/{postId}/reactions/{userId}
+- Contador se actualiza en tiempo real
+- Al comentar: abre sección de comentarios o form inline
+- Se guarda en posts/{postId}/comments/{commentId}
+- Comentarios se muestran en hilo debajo del post
+- Usuario puede editar comentario propio dentro de 1h, o eliminar
+- Notificación al autor del post y usuarios mencionados
+
+**Prototipo:** P-25","frontend,community",3
+"US-27: Publicar Aviso de Prueba/Convocatoria Abierta","**Rol:** Administrador / Entrenador
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como administrador deseo publicar avisos de pruebas o convocatorias abiertas para jugadores interesados con la finalidad de atraer talento a la academia.
+
+**Criterios de Aceptación:**
+- Admin/DT accede a Pruebas y Convocatorias
+- Botón Publicar Aviso abre formulario
+- Campos: título, descripción, categoría, posiciones buscadas (multi-select), fecha de prueba, ubicación, contacto (nombre, teléfono verificado), edad mínima/máxima, requisitos
+- Validaciones: contacto debe ser email/teléfono de admin verificado (anti-phishing), descripción >50 caracteres
+- Se guarda en tryouts/{tryoutId}
+- Se publica en sección Avisos de Prueba (visible para usuarios no logueados si configurado)
+- Notificación a jugadores filtrados
+- Foto/logo de academia (opcional) se muestra en aviso
+- Admin/DT puede editar aviso si está abierto
+
+**Prototipo:** P-26, P-26a","backend,community",5
+"US-28: Filtrar Avisos de Prueba","**Rol:** Jugador (no registrado o registrado)
+**Puntos:** 3
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como jugador interesado deseo filtrar avisos de prueba por categoría, posición, fecha y ubicación con la finalidad de encontrar convocatorias relevantes para mí.
+
+**Criterios de Aceptación:**
+- Pantalla Avisos de Prueba muestra lista de avisos activos
+- Filtros: categoría (dropdown), posición (multi-select), fecha (desde-hasta), ubicación (búsqueda text)
+- Búsqueda: campo text busca en título y descripción
+- Resultados se actualizan dinámicamente al cambiar filtros
+- Cada aviso muestra: título, categoría, posiciones, fecha, ubicación, contacto (oculto hasta interés)
+- Botón Más Detalles abre P-26b con info completa
+- Botón Interesado permite contactar (si no logueado, redirige a login)
+
+**Prototipo:** P-26, P-26b","frontend,community",3
+"US-29: Reportar Contenido Inapropiado","**Rol:** Cualquier usuario registrado
+**Puntos:** 3
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como usuario deseo reportar posts, comentarios, reacciones o usuarios por contenido inapropiado (abuso, spam, suplantación) con la finalidad de mantener la comunidad segura.
+
+**Criterios de Aceptación:**
+- Cada post/comentario muestra ícono más opciones con Reportar en menú
+- Al reportar, se abre diálogo solicitando: motivo (dropdown), descripción adicional (opcional), screenshot adjunto (opcional)
+- Se guarda en reports/{reportId} con status: pending
+- Se muestra confirmación Reporte enviado
+- Usuario no puede reportar el mismo contenido dos veces
+- Sistema detiene publicación de contenido reportado (oculta después de X reportes simultáneos)
+- Privacidad: identidad del reportante se oculta del reportado
+
+**Prototipo:** P-27","backend,moderation",3
+"US-30: Moderar y Gestionar Reportes (Admin)","**Rol:** Administrador
+**Puntos:** 5
+**Responsable:** 24100478 – Julia Jhamilett Rojas Estrada
+
+**Descripción:**
+Como administrador deseo revisar reportes de contenido inapropiado, ocultar/eliminar posts o comentarios, bloquear usuarios con la finalidad de garantizar moderación segura.
+
+**Criterios de Aceptación:**
+- Admin accede a Centro de Moderación
+- Pestaña Reportes Pendientes muestra cola de reportes sin revisar
+- Cada reporte muestra: razón, descripción, contenido reportado (preview), reportador (anonimizado), fecha
+- Admin puede:
+  - Desestimar reporte: justificación, status: dismissed
+  - Ocultar contenido: se marca deleted: true, visible solo para autor y admin
+  - Eliminar contenido: deleted: true, eliminatedBy, eliminationReason
+  - Bloquear usuario: status: blocked, blocker, blockedAt, reason
+- Bloqueado se notifica al usuario con razón y opción de apelación
+- Historia de acción se registra en reports/{reportId}/actions
+- Estadísticas: dashboard de reportes por razón, velocidad de resolución, usuarios recurrentes
+
+**Prototipo:** P-28","backend,moderation",5

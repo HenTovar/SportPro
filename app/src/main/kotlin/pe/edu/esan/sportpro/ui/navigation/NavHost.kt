@@ -2,6 +2,7 @@ package pe.edu.esan.sportpro.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -44,8 +45,11 @@ fun SportProNavHost(
         }
 
         // Equipos
-        composable("teams") {
-            TeamsScreen(navController = navController)
+        composable("teams?pick={pick}", arguments = listOf(navArgument("pick") { defaultValue = "" })) { entry ->
+            TeamsScreen(
+                navController = navController,
+                pickTrainings = entry.arguments?.getString("pick") == "trainings"
+            )
         }
         composable("createTeam") {
             CreateTeamScreen(navController = navController)
@@ -95,6 +99,7 @@ object NavigationRoute {
     const val REGISTER = "register"
     const val HOME = "home"
     const val TEAMS = "teams"
+    const val PICK_TEAM_FOR_TRAININGS = "teams?pick=trainings"
     const val CREATE_TEAM = "createTeam"
     const val PLAYERS = "players"
     const val CREATE_PLAYER = "createPlayer"

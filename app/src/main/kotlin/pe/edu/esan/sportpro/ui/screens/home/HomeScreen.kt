@@ -84,7 +84,7 @@ fun HomeScreen(navController: NavHostController) {
             )
         ) {
             Button(
-                onClick = { navController.navigate(NavigationRoute.TEAMS) /* se elige el equipo y luego "Entrenamientos" */ },
+                onClick = { navController.navigate(NavigationRoute.PICK_TEAM_FOR_TRAININGS) },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(0.dp),

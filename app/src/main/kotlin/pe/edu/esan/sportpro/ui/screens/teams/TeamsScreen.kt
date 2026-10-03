@@ -2,6 +2,7 @@
 
 package pe.edu.esan.sportpro.ui.screens.teams
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,7 +52,7 @@ import pe.edu.esan.sportpro.ui.common.rememberEsStaff
  * y a sus entrenamientos. Sólo ADMIN/ENTRENADOR pueden crear o eliminar.
  */
 @Composable
-fun TeamsScreen(navController: NavHostController) {
+fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false) {
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
     var estado by remember { mutableStateOf<EstadoLista<Team>>(EstadoLista.Cargando) }
@@ -66,7 +67,7 @@ fun TeamsScreen(navController: NavHostController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Equipos") },
+                title = { Text(if (pickTrainings) "Elegí un equipo" else "Equipos") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
@@ -75,7 +76,7 @@ fun TeamsScreen(navController: NavHostController) {
             )
         },
         floatingActionButton = {
-            if (esStaff) {
+            if (esStaff && !pickTrainings) {
                 FloatingActionButton(onClick = { navController.navigate("createTeam") }) {
                     Icon(Icons.Filled.Add, contentDescription = "Crear equipo")
                 }
@@ -94,7 +95,11 @@ fun TeamsScreen(navController: NavHostController) {
             ) {
                 // Agrupados por categoría (sub-10, sub-15, primera…)
                 items(equipos.sortedBy { it.category.ordinal }) { equipo ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Card(modifier = Modifier.fillMaxWidth().then(
+                        if (pickTrainings) Modifier.clickable(enabled = equipo.id.isNotBlank()) {
+                            navController.navigate("trainings/${Uri.encode(equipo.id)}")
+                        } else Modifier
+                    )) {
                         Column(Modifier.padding(16.dp)) {
                             Row {
                                 Column(Modifier.weight(1f)) {
@@ -104,25 +109,27 @@ fun TeamsScreen(navController: NavHostController) {
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
-                                if (esStaff) {
+                                if (esStaff && !pickTrainings) {
                                     IconButton(onClick = { aEliminar = equipo }) {
                                         Icon(Icons.Filled.Delete, contentDescription = "Eliminar equipo")
                                     }
                                 }
                             }
-                            Spacer(Modifier.width(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
-                                    if (equipo.id.isNotBlank()) navController.navigate("players/${Uri.encode(equipo.id)}")
-                                }) {
-                                    Text("Jugadores")
+                            if (!pickTrainings) {
+                                Spacer(Modifier.width(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
+                                        if (equipo.id.isNotBlank()) navController.navigate("players/${Uri.encode(equipo.id)}")
+                                    }) {
+                                        Text("Jugadores")
+                                    }
+                                    OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
+                                        if (equipo.id.isNotBlank()) navController.navigate("trainings/${Uri.encode(equipo.id)}")
+                                    }) {
+                                        Text("Entrenamientos")
+                                    }
                                 }
-                                OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
-                                    if (equipo.id.isNotBlank()) navController.navigate("trainings/${Uri.encode(equipo.id)}")
-                                }) {
-                                    Text("Entrenamientos")
                                 }
-                            }
                         }
                     }
                 }

@@ -1,6 +1,8 @@
 package pe.edu.esan.sportpro.ui.screens.home
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,9 +21,11 @@ import pe.edu.esan.sportpro.ui.navigation.NavigationRoute
 fun HomeScreen(navController: NavHostController) {
     val currentUser = FirebaseAuth.getInstance().currentUser
 
+    // Desplazable: en teléfonos bajos o con teclado abierto el contenido no se corta.
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top

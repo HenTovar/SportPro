@@ -15,6 +15,7 @@ service cloud.firestore {
       // Kotlin serializa isActive como active. Un active=false prevalece sobre legado.
       return signedIn() && profile().get('active', profile().get('isActive', false)) == true;
     }
+    function administrator() { return activeUser() && profile().role == 'ADMIN'; }
     function staff() {
       return activeUser() && profile().role in ['ADMIN', 'ENTRENADOR'];
     }
@@ -62,6 +63,7 @@ service cloud.firestore {
       let linked = getAfter(/databases/$(database)/documents/teams/$(invitation.teamId)/players/$(invitation.playerId)).data;
       return activeUser() && profile().role == 'PADRE' && request.auth.uid == uid
         && code.matches('[A-HJ-NP-Z2-9]{12}') && invitation.usedBy == ''
+        && (child.get('familyRevokedAt', null) == null || invitation.createdAt > child.familyRevokedAt)
         && invitation.expiresAt > request.time && child.get('active', child.get('isActive', true)) == true
         && (child.get('parentUid', null) == null || child.parentUid == '' || child.parentUid == uid)
         && consumed.usedBy == uid && consumed.usedAt == request.time
@@ -81,6 +83,41 @@ service cloud.firestore {
         && next[invitation.teamId].diff(old.get(invitation.teamId, {})).affectedKeys().hasOnly([invitation.playerId])
         && validFamilyClaim(code, uid);
     }
+    // Revoke exactly one grant; preserve siblings, other teams and unrelated fields.
+    function revocationMapMatches(old, next, team, player) {
+      let group = old.get(team, {});
+      return next is map && next.diff(old).affectedKeys().hasOnly([team])
+        && ((!(player in group) && next == old)
+          || (player in group && (
+            (!(team in next) && group.keys().hasOnly([player]))
+            || (team in next && next[team] is map && !(player in next[team])
+              && next[team].diff(group).affectedKeys().hasOnly([player])
+              && next[team].size() == group.size() - 1))));
+    }
+    function validFamilyRevocation(uid) {
+      let audit = getAfter(/databases/$(database)/documents/users/$(uid)).data.lastFamilyRevocation;
+      let before = get(/databases/$(database)/documents/users/$(uid)).data;
+      let after = getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let child = get(/databases/$(database)/documents/teams/$(audit.teamId)/players/$(audit.playerId)).data;
+      let detached = getAfter(/databases/$(database)/documents/teams/$(audit.teamId)/players/$(audit.playerId)).data;
+      let legacy = before.get('teamId', '') == audit.teamId && before.get('playerId', '') == audit.playerId;
+      return administrator() && audit.keys().hasOnly(['teamId','playerId','by','at'])
+        && audit.teamId is string && audit.teamId.size() > 0
+        && audit.playerId is string && audit.playerId.size() > 0
+        && audit.by == request.auth.uid && audit.at == request.time
+        && after.diff(before).affectedKeys().hasOnly(['children','teamId','playerId','lastFamilyRevocation'])
+        && (audit.playerId in before.get('children', {}).get(audit.teamId, {}) || legacy || child.get('parentUid', '') == uid)
+        && revocationMapMatches(before.get('children', {}), after.get('children', {}), audit.teamId, audit.playerId)
+        && ((legacy && after.get('teamId', '') == '' && after.get('playerId', '') == '')
+          || (!legacy && after.get('teamId', '') == before.get('teamId', '')
+            && after.get('playerId', '') == before.get('playerId', '')))
+        && detached.diff(child).affectedKeys().hasOnly(['parentUid','familyRevokedAt','familyRevokedParentUid'])
+        && detached.familyRevokedParentUid == uid
+        && detached.familyRevokedAt == request.time
+        && ((child.get('parentUid', '') == uid && detached.get('parentUid', null) in [null, ''])
+          || (child.get('parentUid', '') != uid && detached.get('parentUid', null) == child.get('parentUid', null)));
+    }
+
     match /familyCodes/{code} {
       allow get: if staff() || (activeUser() && profile().role == 'PADRE'
         && resource.data.usedBy == '' && resource.data.expiresAt > request.time);
@@ -112,7 +149,7 @@ service cloud.firestore {
         && request.resource.data.get('playerId', '') == ''
         && request.resource.data.get('active', true) == true
         && request.resource.data.get('isActive', true) == true;
-      // Sólo el creador verificado aprueba solicitudes ajenas mediante escritura atómica.
+      // La matriz de aprobadores y la limpieza familiar se verifican en la escritura atómica.
       allow update: if (signedIn() && request.auth.uid != uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'children'])
         && request.resource.data.get('children', {}) == {}
@@ -122,7 +159,8 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.toRole == request.resource.data.role
         && getAfter(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'APPROVED')
         || (signedIn() && request.auth.uid == uid && validFamilyMap(uid))
-        || staff()
+        || (administrator() && request.resource.data.keys().hasAll(['lastFamilyRevocation']) && validFamilyRevocation(uid))
+        || staff() && resource.data.role != 'PADRE'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId', 'playerId'])
         && request.resource.data.teamId is string
         && request.resource.data.playerId is string;
@@ -151,7 +189,19 @@ service cloud.firestore {
 
       match /players/{playerId} {
         allow read: if staff() || assignedPlayer(teamId, playerId);
-        allow write: if staff();
+        allow create: if staff() && request.resource.data.get('parentUid', null) in [null, '']
+          && request.resource.data.get('familyRevokedAt', null) == null
+          && request.resource.data.get('familyRevokedParentUid', null) == null;
+        allow update: if staff()
+          && request.resource.data.get('parentUid', null) == resource.data.get('parentUid', null)
+          && request.resource.data.get('familyRevokedAt', null) == resource.data.get('familyRevokedAt', null)
+          && request.resource.data.get('familyRevokedParentUid', null) == resource.data.get('familyRevokedParentUid', null);
+        allow delete: if administrator() && resource.data.get('parentUid', null) in [null, ''];
+        allow update: if administrator() && request.resource.data.get('familyRevokedParentUid', '') is string
+          && request.resource.data.familyRevokedParentUid != '' && validFamilyRevocation(request.resource.data.familyRevokedParentUid)
+          && getAfter(/databases/$(database)/documents/users/$(request.resource.data.familyRevokedParentUid)).data.lastFamilyRevocation.teamId == teamId
+          && getAfter(/databases/$(database)/documents/users/$(request.resource.data.familyRevokedParentUid)).data.lastFamilyRevocation.playerId == playerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid','familyRevokedAt','familyRevokedParentUid']);
         allow update: if signedIn()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid'])
           && validFamilyClaim(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode, request.auth.uid)

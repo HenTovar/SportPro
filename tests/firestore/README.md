@@ -70,3 +70,9 @@ La salida `PERMISSION_DENIED` de los negativos es esperada cuando la aserción e
 Los roles pueden cambiar mediante solicitudes aprobadas atómicamente según la
 matriz de la suite heredada; la frase histórica «roles inmutables» se refiere a
 que el titular no puede editarlos libremente.
+
+## Revocación administrativa (1.2.0/code6)
+ADMIN activo retira un único hijo y el puntero de ficha en transacción, con limpieza de vínculo legado
+si coincidía. Se preservan hermanos, otros equipos y la familia que ahora ocupe un puntero cambiado.
+Revocar invalida códigos anteriores para esa ficha. Coach/padre no pueden revocar ni alterar el sello.
+El control revocation.control.test.mjs debe pasar con reglas code6 y fallar con code5.

@@ -422,3 +422,84 @@ test('family role transition: old maps on a non-parent also cannot reactivate vi
   const good=writeBatch(coach);good.update(doc(coach,'users',uid),{role:'PADRE',children:{}});good.update(doc(coach,'roleRequests',uid),{status:'APPROVED'});await assertSucceeds(good.commit());
   await assertFails(getDoc(doc(owner,'teams/fx/players/k1')));
 });
+
+// Same three-document reader, now with ADMIN-only two-document revocation.
+async function revokeFamily(actor,uid,team,player,options={}) {
+  const c=db(actor), user=doc(c,'users',uid), child=doc(c,'teams',team,'players',player);
+  return runTransaction(c,async tx=>{
+    const a=(await tx.get(user)).data(),p=(await tx.get(child)).data();
+    const children={...(a.children||{})}, group={...(children[team]||{})};
+    delete group[player]; if(Object.keys(group).length)children[team]=group;else delete children[team];
+    const fields={children,lastFamilyRevocation:{teamId:team,playerId:player,by:actor,at:serverTimestamp()},...(options.extra||{})};
+    if(a.teamId===team && a.playerId===player){fields.teamId='';fields.playerId=''}
+    if(!options.skipProfile)tx.update(user,fields);
+    if(!options.skipChild)tx.update(child,{parentUid:p.parentUid===uid?null:(p.parentUid??null),familyRevokedAt:serverTimestamp(),familyRevokedParentUid:uid,...(options.extraChild||{})});
+  });
+}
+test('ADMIN revokes one child atomically: denies subsequent child and attendance reads, preserves siblings and other teams',async()=>{
+  await env.withSecurityRulesDisabled(async c=>{
+    for(const [p,d]of Object.entries({
+      'users/revoke-parent':profile('revoke-parent','PADRE',{teamId:'rx',playerId:'a'}),
+      'teams/rx':{active:true},'teams/ry':{active:true},
+      'teams/rx/players/a':{name:'A',parentUid:null,active:true},'teams/rx/players/b':{name:'B',parentUid:null,active:true},
+      'teams/ry/players/c':{name:'C',parentUid:null,active:true},'teams/rx/attendance/a':{playerId:'a'}
+    }))await setDoc(doc(c.firestore(),p),d);
+  });
+  for(const [code,t,p,n]of [['ABCDEFGH2455','rx','a','A'],['ABCDEFGH2456','rx','b','B'],['ABCDEFGH2457','ry','c','C']]){
+    await assertSucceeds(setDoc(doc(db('coach'),'familyCodes',code),familyGift(t,p,n)));await assertSucceeds(redeemFamily('revoke-parent',code));
+  }
+  await assertSucceeds(setDoc(doc(db('coach'),'familyCodes/ABCDEFGH2458'),familyGift('rx','a','A')));
+  await assertSucceeds(getDoc(doc(db('revoke-parent'),'teams/rx/players/a')));
+  await assertSucceeds(getDoc(doc(db('revoke-parent'),'teams/rx/attendance/a')));
+  await assertFails(revokeFamily('coach','revoke-parent','rx','a'));
+  await assertFails(revokeFamily('family-b','revoke-parent','rx','a'));
+  await assertFails(updateDoc(doc(db('coach'),'teams/rx/players/a'),{parentUid:null}));
+  await assertFails(updateDoc(doc(db('coach'),'users/revoke-parent'),{teamId:'',playerId:''}));
+  for(const options of [{skipChild:true},{skipProfile:true},{extra:{role:'JUGADOR'}},{extra:{children:{}}}])
+    await assertFails(revokeFamily('admin','revoke-parent','rx','a',options));
+  await assertSucceeds(revokeFamily('admin','revoke-parent','rx','a'));
+  await assertFails(getDoc(doc(db('revoke-parent'),'teams/rx/players/a')));
+  await assertFails(getDoc(doc(db('revoke-parent'),'teams/rx/attendance/a')));
+  for(const path of ['teams/rx/players/b','teams/ry/players/c'])await assertSucceeds(getDoc(doc(db('revoke-parent'),path)));
+  const user=(await getDoc(doc(db('revoke-parent'),'users/revoke-parent'))).data();
+  assert.equal(user.teamId,'');assert.equal(user.playerId,'');assert.equal(user.children.rx.a,undefined);
+  assert.equal((await getDoc(doc(db('admin'),'teams/rx/players/a'))).data().parentUid,null);
+  await assertFails(redeemFamily('revoke-parent','ABCDEFGH2458')); // old, unused bearer code is invalidated
+  await assertFails(updateDoc(doc(db('coach'),'teams/rx/players/a'),{familyRevokedAt:null}));
+  await assertSucceeds(setDoc(doc(db('coach'),'familyCodes/ABCDEFGH2459'),familyGift('rx','a','A')));
+  await assertSucceeds(redeemFamily('revoke-parent','ABCDEFGH2459'));
+  await assertFails(revokeFamily('revoke-parent','revoke-parent','rx','a'));
+});
+test('ADMIN revokes legacy-only and last-child links; stale map removal preserves the actual other parent',async()=>{
+  await env.withSecurityRulesDisabled(async c=>{
+    for(const [p,d]of Object.entries({
+      'users/legacy-revoke':profile('legacy-revoke','PADRE',{teamId:'rx',playerId:'legacy'}),
+      'teams/rx/players/legacy':{name:'Legacy',parentUid:'legacy-revoke',active:true},
+      'users/stale-parent':profile('stale-parent','PADRE',{children:{rx:{b:{name:'B',code:'old'}}}}),
+      'users/inactive-admin':profile('inactive-admin','ADMIN',{active:false})
+    }))await setDoc(doc(c.firestore(),p),d);
+  });
+  await assertSucceeds(getDoc(doc(db('legacy-revoke'),'teams/rx/players/legacy')));
+  await assertFails(revokeFamily('inactive-admin','legacy-revoke','rx','legacy'));
+  await assertSucceeds(revokeFamily('admin','legacy-revoke','rx','legacy'));
+  await assertFails(getDoc(doc(db('legacy-revoke'),'teams/rx/players/legacy')));
+  await assertSucceeds(revokeFamily('admin','stale-parent','rx','b'));
+  await assertFails(getDoc(doc(db('stale-parent'),'teams/rx/players/b')));
+  await assertSucceeds(getDoc(doc(db('revoke-parent'),'teams/rx/players/b')));
+  assert.equal((await getDoc(doc(db('admin'),'teams/rx/players/b'))).data().parentUid,'revoke-parent');
+  assert.deepEqual((await getDoc(doc(db('stale-parent'),'users/stale-parent'))).data().children,{});
+});
+test('revocation hardening: stale grant without pointer, wrong actor stamp, extra child mutation and non-ADMIN fail closed',async()=>{
+  await env.withSecurityRulesDisabled(async c=>{
+    await setDoc(doc(c.firestore(),'users/stale-empty'),profile('stale-empty','PADRE',{children:{rx:{empty:{name:'Old',code:'old'}}}}));
+    await setDoc(doc(c.firestore(),'teams/rx/players/empty'),{name:'Old',parentUid:null,active:true});
+  });
+  await assertSucceeds(getDoc(doc(db('stale-empty'),'teams/rx/players/empty')));
+  await assertFails(revokeFamily('stale-empty','stale-empty','rx','empty'));
+  await assertFails(revokeFamily('admin','stale-empty','rx','empty',{extra:{lastFamilyRevocation:{teamId:'rx',playerId:'empty',by:'coach',at:serverTimestamp()}}}));
+  await assertFails(revokeFamily('admin','stale-empty','rx','empty',{extraChild:{name:'Injected'}}));
+  await assertSucceeds(revokeFamily('admin','stale-empty','rx','empty'));
+  await assertFails(getDoc(doc(db('stale-empty'),'teams/rx/players/empty')));
+  await assertFails(updateDoc(doc(db('coach'),'teams/rx/players/empty'),{familyRevokedParentUid:'someone'}));
+  await assertSucceeds(updateDoc(doc(db('coach'),'teams/rx/players/empty'),{name:'Legitimate edit'}));
+});

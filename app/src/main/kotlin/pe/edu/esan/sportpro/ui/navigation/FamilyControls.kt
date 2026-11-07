@@ -70,4 +70,5 @@ fun FamilyCodeIssuer(teamId: String, playerId: String?) {
     }) { Text(if (busy) "Generando…" else "Generar código para padre") }
     if (code.isNotBlank()) SelectionContainer { Text("Código: ${code.chunked(4).joinToString("-")} · vence en 20 min · un solo uso") }
     if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+    FamilyRevocationControls(teamId, playerId)
 }

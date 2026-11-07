@@ -19,6 +19,18 @@ object FamilyPolicy {
             .filter { it.teamId.isNotBlank() && it.playerId.isNotBlank() }.distinctBy { it.key }
     }
     fun selected(user: User?, remembered: String): FamilyChild? = children(user).let { rows -> rows.find { it.key == remembered } ?: rows.firstOrNull() }
+    fun withoutChild(raw: Any?, team: String, player: String): Map<String, Any?> {
+        val result = (raw as? Map<*, *>)?.entries?.associate {
+            require(it.key is String) { "Mapa familiar inválido" }; it.key as String to it.value
+        }?.toMutableMap() ?: mutableMapOf()
+        val children = (result[team] as? Map<*, *>)?.entries?.associate {
+            require(it.key is String) { "Mapa familiar inválido" }; it.key as String to it.value
+        }?.toMutableMap() ?: return result
+        if (!children.containsKey(player)) return result
+        children.remove(player)
+        if (children.isEmpty()) result.remove(team) else result[team] = children
+        return result
+    }
     fun decode(raw: Any?): List<FamilyChild> = (raw as? Map<*, *>)?.flatMap { (team, players) ->
         (players as? Map<*, *>)?.mapNotNull { (player, fields) ->
             if (team !is String || player !is String || fields !is Map<*, *>) null

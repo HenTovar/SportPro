@@ -1,4 +1,4 @@
-# Vínculos familiares — 1.2.0 (versionCode 5)
+# Vínculos familiares — 1.2.0 (versionCode 6)
 
 ## Uso
 1. El entrenador crea/guarda la ficha y vuelve a **Editar jugador**.
@@ -44,20 +44,26 @@ Los vínculos antiguos `teamId/playerId` permanecen y se presentan como la prime
   reactiva un mapa antiguo. Esto no borra teamId/playerId legado ni cambia parentUid de las fichas.
 - El límite de emisión por staff y la retención del nombre en códigos son pendientes: aún no hay cuota
   de emisión ni borrado de códigos usados. No se atribuye esa protección al generador aleatorio.
-- Retirar un vínculo requiere administración de confianza que retire la entrada en `children`
-  y el `parentUid` correspondiente; no se añade un borrado destructivo automático.
+- El ADMIN activo puede revocar desde Editar jugador → Administrar vínculo familiar. Selecciona una
+  cuenta relacionada y confirma exactamente 1 vínculo. La transacción retira sólo ese hijo del mapa,
+  elimina el grupo de equipo si quedó vacío y limpia también teamId/playerId si apuntaban a ese hijo.
+- Limpia parentUid sólo si aún pertenece a la cuenta revocada; un puntero de otra familia se conserva.
+  Se guardan lastFamilyRevocation (perfil) y familyRevokedAt/familyRevokedParentUid (ficha) para ligar
+  las dos escrituras y rechazar códigos emitidos antes de la revocación. No se borran jugadores ni historiales.
+- Coach y padre no pueden revocar un vínculo, editar directamente parentUid o borrar el sello de revocación.
+  El cambio de rol aprobado sigue teniendo su protocolo separado y limpia el mapa como antes.
+- La revocación corta lecturas futuras autorizadas por el servidor, incluida la asistencia. No borra
+  copias que un dispositivo ya haya descargado; no se promete retractar información ni limpiar caches ajenas.
 
 ## Reglas y despliegue manual
 `firestore.rules` es el candidato nuevo. **No se ha desplegado.** El APK necesita estas reglas para
 crear/canjear códigos. El propietario debe revisarlas y publicarlas desde Firebase Console después
- de la aceptación. Las reglas previas son las del commit `ef24d37ca4d1d3052e52788e54acf2247322f0ee`:
+ de la aceptación. El respaldo seguro de esta ronda es code5, commit 3e5bdddf16b69e9e05ee5d006c5078a376b3a12e.
+Si hay un problema, preferir revertir sólo el APK y conservar las reglas que cierran el alta ENTRENADOR.
+Volver a reglas code5 requiere decisión del propietario: elimina la nueva revocación pero mantiene cerrado
+el alta privilegiada. Las reglas de la base antigua ef24d37c son sólo un antecedente: restaurarlas reabre
+la auto-alta staff y NO es un rollback seguro para menores. No borrar perfiles, mapas o códigos.
 
-```sh
-git show ef24d37ca4d1d3052e52788e54acf2247322f0ee:firestore.rules > firestore.before.rules
-```
-
-Para rollback, restaurar ese archivo en la consola y la versión anterior del APK. No borrar perfiles,
-ni mapas familiares ni códigos: se conservan como datos y las reglas anteriores no conceden accesos por ellos.
 No es necesario ni se propone cambiar Storage ni pagar un servicio nuevo.
 
 ## Verificación

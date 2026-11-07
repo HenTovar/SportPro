@@ -47,3 +47,16 @@ aprobadas y cero fallos (`npm test`, Node test runner). Se comprobaron tanto
 lecturas puntuales como consultas contra las reglas compiladas del servidor
 emulado. Esto no sustituye una prueba de aceptación en dispositivos ni una
 verificación del despliegue remoto.
+
+
+## Semana 12
+
+Diez pruebas agrupadas en total. Las nuevas ejecutan lotes reales con evento,
+revisión inmutable y contador de versión; corrección/anulación, listeners entre
+clientes, evento nuevo pendiente offline, privacidad del borrador y rechazo de
+aprobación desactualizada; comunidad, reportes, reacciones y moderación por equipo.
+La salida `PERMISSION_DENIED` de los negativos es esperada cuando la aserción es
+`assertFails`. No se permite convertir un error inesperado de un positivo en verde.
+Los roles pueden cambiar mediante solicitudes aprobadas atómicamente según la
+matriz de la suite heredada; la frase histórica «roles inmutables» se refiere a
+que el titular no puede editarlos libremente.

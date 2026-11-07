@@ -4,7 +4,9 @@
 
 SportPro es una aplicación Android para la gestión integral de equipos y academias de fútbol. Permite administrar jugadores, entrenamientos, partidos y asistencia, con un enfoque en la comunicación y comunidad entre entrenadores, jugadores y padres de familia.
 
-**Estado del Proyecto:** Entregable 2 - 40% de completitud
+**Entrega en revisión:** Semana 12. Partido en vivo, comunidad y resumen IA v1.
+
+Ver [ENTREGA.md](ENTREGA.md) para alcance y límites, [guía de demo](docs/SEMANA12_DEMO.md) y [pruebas](docs/SEMANA12_PRUEBAS.md). El video de partido real y la aceptación en dos teléfonos están pendientes; no se declara un porcentaje aceptado sin esa evidencia.
 
 ## Requisitos Previos
 
@@ -107,10 +109,10 @@ SportPro/
 └── README.md
 ```
 
-## Funcionalidades Principales (Entregable 2)
+## Funcionalidades heredadas y nuevas
 
 ### Autenticación
--  Registro de usuarios con roles (Admin, Entrenador, Jugador, Padre)
+-  Registro de Entrenador/Jugador/Padre; ADMIN mediante aprobación
 -  Inicio de sesión con email y contraseña
 -  Cierre de sesión
 -  Validación de email y contraseña
@@ -149,7 +151,7 @@ SportPro/
 
 ## Pruebas Unitarias
 
-El proyecto incluye **30 pruebas unitarias** que cubren:
+El proyecto incluye pruebas unitarias que cubren:
 
 - Validación de email
 - Validación de contraseña
@@ -185,8 +187,8 @@ app/build/test-results/testDebugUnitTest/
 - [ ] Estadísticas avanzadas
 - [ ] Reportes en PDF
 - [ ] Integración con calendario
-- [ ] Módulo de comunicación (chat, publicaciones)
-- [ ] Implementar IA para resumen narrativo de partidos
+- [x] Comunidad de texto, comentarios, reacciones y moderación por equipo
+- [x] Integración Retrofit y revisión de resumen narrativo; proveedor real pendiente de configurar
 
 ## Soporte y Contacto
 
@@ -196,7 +198,7 @@ Para preguntas o problemas:
 
 Curso: **Desarrollo de Aplicaciones Móviles**
 Universidad: **ESAN**
-Fecha de Entrega: **3 de Octubre de 2026**
+Actualización Semana 12: **6 de Noviembre de 2026**
 
 ## Licencia
 

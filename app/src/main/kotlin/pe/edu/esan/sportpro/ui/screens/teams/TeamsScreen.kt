@@ -57,7 +57,7 @@ import pe.edu.esan.sportpro.ui.common.rememberEsStaff
  * y a sus entrenamientos. Sólo ADMIN/ENTRENADOR pueden crear o eliminar.
  */
 @Composable
-fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false, pickMatches: Boolean = false) {
+fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false, pickMatches: Boolean = false, pickCommunity: Boolean = false) {
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
     var estado by remember { mutableStateOf<EstadoLista<Team>>(EstadoLista.Cargando) }
@@ -84,7 +84,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (pickTrainings || pickMatches) "Elegí un equipo" else "Equipos") },
+                title = { Text(if (pickTrainings || pickMatches || pickCommunity) "Elegí un equipo" else "Equipos") },
                 navigationIcon = {
                     IconButton(onClick = { navController.safeBack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
@@ -93,7 +93,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
             )
         },
         floatingActionButton = {
-            if (esStaff && !(pickTrainings || pickMatches)) {
+            if (esStaff && !(pickTrainings || pickMatches || pickCommunity)) {
                 FloatingActionButton(onClick = { navController.navigate("createTeam") }) {
                     Icon(Icons.Filled.Add, contentDescription = "Crear equipo")
                 }
@@ -113,8 +113,8 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                 // Agrupados por categoría (sub-10, sub-15, primera…)
                 items(equipos.sortedBy { it.category.ordinal }) { equipo ->
                     Card(modifier = Modifier.fillMaxWidth().then(
-                        if (pickTrainings || pickMatches) Modifier.clickable(enabled = equipo.id.isNotBlank()) {
-                            navController.navigate("${if (pickMatches) "matches" else "trainings"}/${Uri.encode(equipo.id)}")
+                        if (pickTrainings || pickMatches || pickCommunity) Modifier.clickable(enabled = equipo.id.isNotBlank()) {
+                            navController.navigate("${if (pickCommunity) "community" else if (pickMatches) "matches" else "trainings"}/${Uri.encode(equipo.id)}")
                         } else Modifier
                     )) {
                         Column(Modifier.padding(16.dp)) {
@@ -126,14 +126,14 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
-                                if (esStaff && !(pickTrainings || pickMatches)) {
+                                if (esStaff && !(pickTrainings || pickMatches || pickCommunity)) {
                                     TextButton(onClick = { navController.navigate("editTeam/${Uri.encode(equipo.id)}") }) { Text("Editar") }
                                     IconButton(onClick = { aEliminar = equipo }) {
                                         Icon(Icons.Filled.Delete, contentDescription = "Eliminar equipo")
                                     }
                                 }
                             }
-                            if (!(pickTrainings || pickMatches)) {
+                            if (!(pickTrainings || pickMatches || pickCommunity)) {
                                 Spacer(Modifier.width(8.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {

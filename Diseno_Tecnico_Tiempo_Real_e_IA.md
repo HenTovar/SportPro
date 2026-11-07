@@ -1,3 +1,5 @@
+> Documento de diseño histórico. La implementación Semana 12 vigente y sus límites se describen en ENTREGA.md; este pseudocódigo no acredita un backend desplegado.
+
 # Diseño Técnico: Registro de Eventos en Tiempo Real e Integración con IA
 
 **Autores:** Henry Aaron Tovar Landa (24100514), Julia Jhamilett Rojas Estrada (24100478)
@@ -405,7 +407,7 @@ Recuerda: SOLO puedes usar información de los eventos listados. No inventes det
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4-1-20250805',
+          model: process.env.IA_MODEL,
           max_tokens: 1024,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],

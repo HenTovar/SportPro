@@ -111,18 +111,143 @@ service cloud.firestore {
       }
     }
 
+    function boundedText(value, max) { return value is string && value.size() > 0 && value.size() <= max; }
+    function validType(d) {
+      return d.keys().hasOnly(['label','countsGoal','active','updatedBy','updatedAt'])
+        && boundedText(d.label,40) && d.countsGoal is bool && d.active is bool
+        && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+    }
+    function currentCatalog(matchId, d) {
+      let type = get(/databases/$(database)/documents/matches/$(matchId)/eventTypes/$(d.typeId)).data;
+      return type.active == true && d.typeLabel == type.label && d.countsGoal == type.countsGoal;
+    }
+    function validEvent(matchId, eventId, d) {
+      let parent = getAfter(/databases/$(database)/documents/matches/$(matchId)).data;
+      let before = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      let audit = getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)/revisions/$(d.revisionId)).data;
+      return d.keys().hasOnly(['typeId','typeLabel','countsGoal','minute','teamId','player','note','voided',
+          'revision','revisionId','createdBy','updatedBy','createdAt','updatedAt'])
+        && boundedText(d.typeId,80) && boundedText(d.typeLabel,40) && d.countsGoal is bool
+        && (d.minute == null || (d.minute is int && d.minute >= 0 && d.minute <= 180))
+        && d.teamId in [parent.teamA,parent.teamB]
+        && d.player is string && d.player.size() <= 80 && d.note is string && d.note.size() <= 300
+        && d.voided is bool && d.revision is int && d.revision >= 0
+        && d.revisionId is string && d.revisionId.matches('[A-Za-z0-9-]{1,80}')
+        && d.updatedBy == request.auth.uid && d.updatedAt == request.time
+        && parent.eventVersion == before.get('eventVersion',0) + 1 && parent.lastEventId == eventId
+        && audit.actorUid == request.auth.uid && audit.eventData == d && audit.at == request.time;
+    }
     match /matches/{matchId} {
-      // Para lectores, consultar por teamA o teamB; sin equipo asignado se deniega.
       allow read: if staff() || assignedTeam(resource.data.get('teamA', ''))
         || assignedTeam(resource.data.get('teamB', ''));
-      allow write: if staff();
+      allow create: if staff() && request.resource.data.keys().hasOnly([
+          'name','teamA','teamB','date','status','active','createdBy','eventVersion'])
+        && boundedText(request.resource.data.name,100)
+        && request.resource.data.teamA is string && request.resource.data.teamB is string
+        && request.resource.data.teamA != request.resource.data.teamB
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamA))
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamB))
+        && request.resource.data.date == request.time && request.resource.data.status == 'not_started'
+        && request.resource.data.active == true && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.eventVersion == 0;
+      allow update: if staff() && (
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','eventVersion','updatedBy','updatedAt'])
+          && request.resource.data.eventVersion == resource.data.get('eventVersion',0)+1
+          && request.resource.data.status in ['not_started','in_progress','finished']
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['eventVersion','lastEventId'])
+          && request.resource.data.eventVersion == resource.data.get('eventVersion',0)+1
+          && getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.updatedAt == request.time
+          && (!exists(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId))
+            || getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.revisionId
+              != get(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.revisionId)));
+      allow delete: if false;
+      match /eventTypes/{typeId} {
+        allow read: if matchReader(matchId);
+        allow create, update: if staff() && validType(request.resource.data);
+        allow delete: if false;
+      }
       match /events/{eventId} {
         allow read: if matchReader(matchId);
-        allow write: if staff();
+        allow create: if staff() && validEvent(matchId,eventId,request.resource.data)
+          && currentCatalog(matchId,request.resource.data) && request.resource.data.revision == 0
+          && request.resource.data.voided == false && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if staff() && validEvent(matchId,eventId,request.resource.data)
+          && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.revision == resource.data.revision+1 && request.resource.data.revisionId != resource.data.revisionId
+          && ((request.resource.data.typeId == resource.data.typeId && request.resource.data.typeLabel == resource.data.typeLabel
+              && request.resource.data.countsGoal == resource.data.countsGoal) || currentCatalog(matchId,request.resource.data));
+        allow delete: if false;
+        match /revisions/{revisionId} {
+          allow read: if matchReader(matchId);
+          allow create: if staff()
+            && request.resource.data.keys().hasOnly(['actorUid','at','previousData','eventData'])
+            && request.resource.data.actorUid == request.auth.uid && request.resource.data.at == request.time
+            && request.resource.data.eventData == getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)).data
+            && request.resource.data.eventData.revisionId == revisionId
+            && ((!exists(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)) && request.resource.data.previousData == {})
+              || request.resource.data.previousData == get(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)).data);
+          allow update, delete: if false;
+        }
       }
       match /aiSummaries/{summaryId} {
-        allow read: if matchReader(matchId);
-        allow write: if staff();
+        allow read: if matchReader(matchId) && (staff() || summaryId == 'published');
+        allow create, update: if staff() && summaryId in ['draft','published']
+          && request.resource.data.keys().hasOnly(['text','sourceHash','sourceVersion','state','authorUid','approvedBy','updatedAt'])
+          && boundedText(request.resource.data.text,8000) && request.resource.data.sourceHash.matches('[a-f0-9]{64}')
+          && request.resource.data.sourceVersion is int && request.resource.data.sourceVersion >= 0
+          && request.resource.data.authorUid == request.auth.uid && request.resource.data.updatedAt == request.time
+          && ((summaryId == 'draft' && request.resource.data.state == 'DRAFT' && request.resource.data.approvedBy == '')
+            || (request.resource.data.state == 'APPROVED' && request.resource.data.approvedBy == request.auth.uid
+              && request.resource.data.sourceVersion == get(/databases/$(database)/documents/matches/$(matchId)).data.get('eventVersion',0)));
+        allow delete: if false;
+      }
+    }
+
+    function communityMember(teamId) { return staff() || assignedTeam(teamId); }
+    function visiblePost(teamId,postId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)/posts/$(postId)).data.state == 'VISIBLE';
+    }
+    match /teams/{teamId}/posts/{postId} {
+      allow read: if communityMember(teamId) && (staff() || resource.data.state == 'VISIBLE');
+      allow create: if communityMember(teamId)
+        && request.resource.data.keys().hasOnly(['text','authorUid','state','createdAt','updatedAt','updatedBy'])
+        && boundedText(request.resource.data.text,1000) && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.state == 'VISIBLE' && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid;
+      allow update: if communityMember(teamId) && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+        && ((resource.data.authorUid == request.auth.uid && resource.data.state == 'VISIBLE'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text','updatedAt','updatedBy'])
+          && boundedText(request.resource.data.text,1000))
+        || (staff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','updatedAt','updatedBy'])
+          && request.resource.data.state in ['VISIBLE','HIDDEN']));
+      allow delete: if false;
+      match /comments/{commentId} {
+        allow read: if communityMember(teamId) && (staff() || (visiblePost(teamId,postId) && resource.data.state == 'VISIBLE'));
+        allow create: if communityMember(teamId) && visiblePost(teamId,postId)
+          && request.resource.data.keys().hasOnly(['text','authorUid','state','createdAt','updatedAt','updatedBy'])
+          && boundedText(request.resource.data.text,500) && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.state == 'VISIBLE' && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid;
+        allow update: if staff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','updatedAt','updatedBy'])
+          && request.resource.data.state == 'HIDDEN' && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+        allow delete: if false;
+      }
+      match /reactions/{uid} {
+        allow read: if communityMember(teamId) && (staff() || visiblePost(teamId,postId));
+        allow create, update: if communityMember(teamId) && visiblePost(teamId,postId) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['kind','createdAt']) && request.resource.data.kind == 'LIKE'
+          && request.resource.data.createdAt == request.time;
+        allow delete: if communityMember(teamId) && request.auth.uid == uid;
+      }
+      match /reports/{uid} {
+        allow read: if communityMember(teamId) && (staff() || request.auth.uid == uid);
+        allow create, update: if communityMember(teamId) && visiblePost(teamId,postId) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['reason','createdAt']) && boundedText(request.resource.data.reason,300)
+          && request.resource.data.createdAt == request.time;
+        allow delete: if false;
       }
     }
 

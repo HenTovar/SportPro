@@ -67,3 +67,6 @@ app/google-services.json
 
 # Local JavaScript dependencies (including Firebase test emulator)
 node_modules/
+
+# Local Kotlin compiler cache
+.kotlin/

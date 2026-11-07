@@ -1,7 +1,8 @@
+import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where, serverTimestamp, writeBatch, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
 
 let env;
 const profile = (uid, role, extra = {}) => ({ uid, role, name: uid, email: `${uid}@example.test`, active: true, teamId: '', playerId: '', ...extra });
@@ -32,7 +33,7 @@ before(async () => {
       'matches/away': { teamA: 'c', teamB: 'a', active: true },
       'matches/legacy': { active: true },
       'matches/own/events/e': { type: 'GOAL' }, 'matches/other/events/e': { type: 'GOAL' },
-      'matches/own/aiSummaries/s': { text: 'summary' }
+      'matches/own/aiSummaries/published': { text: 'summary', state: 'APPROVED' }
     };
     for (const [path, data] of Object.entries(seed)) await setDoc(doc(context.firestore(), path), data);
   });
@@ -67,7 +68,7 @@ test('client profiles cannot promote roles, relink themselves or delete and re-r
 test('players and parents see only assigned team, own ficha, trainings, attendance and matches', async () => {
   for (const uid of ['player', 'parent']) {
     const client = db(uid);
-    for (const path of ['teams/a', 'teams/a/players/one', 'teams/a/trainings/t', 'teams/a/attendance/own', 'matches/own', 'matches/own/events/e', 'matches/own/aiSummaries/s']) await assertSucceeds(getDoc(doc(client, path)));
+    for (const path of ['teams/a', 'teams/a/players/one', 'teams/a/trainings/t', 'teams/a/attendance/own', 'matches/own', 'matches/own/events/e', 'matches/own/aiSummaries/published']) await assertSucceeds(getDoc(doc(client, path)));
     for (const path of ['teams/b', 'teams/a/players/two', 'teams/b/players/one', 'teams/b/trainings/t', 'teams/a/attendance/other', 'matches/other', 'matches/legacy', 'matches/other/events/e', 'users/coach']) await assertFails(getDoc(doc(client, path)));
     await assertFails(getDocs(collection(client, 'teams')));
     await assertFails(getDocs(collection(client, 'teams/a/players')));
@@ -156,4 +157,106 @@ test('role requests reject stale source roles, self approval, forged claims and 
   self.update(doc(creator, 'users/henry'), { role: 'ADMIN' });
   self.update(doc(creator, 'roleRequests/henry'), { status: 'APPROVED' });
   await assertFails(self.commit());
+});
+
+
+async function newMatch(id) {
+  const c = db('coach');
+  await assertSucceeds(setDoc(doc(c, `matches/${id}`), { name:'Práctica',teamA:'a',teamB:'b',date:serverTimestamp(),status:'not_started',active:true,createdBy:'coach',eventVersion:0 }));
+  await assertSucceeds(setDoc(doc(c, `matches/${id}/eventTypes/goal`), { label:'Gol',countsGoal:true,active:true,updatedBy:'coach',updatedAt:serverTimestamp() }));
+  return c;
+}
+function eventData(extra={}) {
+  return {typeId:'goal',typeLabel:'Gol',countsGoal:true,minute:null,teamId:'a',player:'',note:'Registro tardío',voided:false,
+    revision:0,revisionId:'rev-0',createdBy:'coach',updatedBy:'coach',createdAt:serverTimestamp(),updatedAt:serverTimestamp(),...extra};
+}
+function eventBatch(c, matchId, id, previous, data, version) {
+  const b=writeBatch(c);
+  b.set(doc(c,`matches/${matchId}/events/${id}`),data);
+  b.set(doc(c,`matches/${matchId}/events/${id}/revisions/${data.revisionId}`),{actorUid:'coach',at:serverTimestamp(),previousData:previous,eventData:data});
+  b.update(doc(c,`matches/${matchId}`),{eventVersion:version,lastEventId:id});
+  return b;
+}
+function waitSnapshot(ref, predicate) {
+  let off;
+  return new Promise((resolve,reject)=>{
+    const timeout=setTimeout(()=>{off?.();reject(new Error('listener timeout'));},12000);
+    off=onSnapshot(ref,s=>{if(predicate(s)){clearTimeout(timeout);off?.();resolve(s);}},e=>{clearTimeout(timeout);off?.();reject(e);});
+  });
+}
+
+test('live events: atomic append, correction, void and immutable actor history; two clients see changes',async()=>{
+  const c=await newMatch('live'); const reader=db('player');
+  const ref=doc(reader,'matches/live/events/one');
+  let seen=waitSnapshot(ref,s=>s.exists() && s.data().revision===0);
+  await assertSucceeds(eventBatch(c,'live','one',{},eventData(),1).commit());
+  assert.equal((await seen).data().minute,null);
+  let old=(await getDoc(doc(c,'matches/live/events/one'))).data();
+  let next={...old,minute:8,player:'Dorsal 9',revision:1,revisionId:'rev-1',updatedBy:'coach',updatedAt:serverTimestamp()};
+  seen=waitSnapshot(ref,s=>s.exists() && s.data().revision===1);
+  await assertSucceeds(eventBatch(c,'live','one',old,next,2).commit());
+  assert.equal((await seen).data().minute,8);
+  old=(await getDoc(doc(c,'matches/live/events/one'))).data();
+  next={...old,voided:true,revision:2,revisionId:'rev-2',updatedAt:serverTimestamp()};
+  seen=waitSnapshot(ref,s=>s.exists() && s.data().voided);
+  await assertSucceeds(eventBatch(c,'live','one',old,next,3).commit()); await seen;
+  assert.equal((await getDocs(collection(reader,'matches/live/events/one/revisions'))).size,3);
+  await assertFails(deleteDoc(doc(c,'matches/live/events/one')));
+  await assertFails(updateDoc(doc(c,'matches/live/events/one/revisions/rev-0'),{actorUid:'admin'}));
+  await assertFails(updateDoc(doc(c,'matches/live/events/one'),{note:'sin historial'}));
+  await assertFails(eventBatch(c,'live','forged',{},eventData({createdBy:'player'}),4).commit());
+  await assertFails(eventBatch(db('player'),'live','reader',{},eventData(),4).commit());
+  await assertFails(setDoc(doc(c,'matches/live/events/no-audit'),eventData()));
+  await assertFails(eventBatch(c,'live','wrong-team',{},eventData({teamId:'foreign'}),4).commit());
+  await assertFails(eventBatch(c,'live','minute',{},eventData({minute:181}),4).commit());
+  const catalog=waitSnapshot(doc(reader,'matches/live/eventTypes/goal'),s=>s.exists() && s.data().label==='Anotación');
+  await updateDoc(doc(c,'matches/live/eventTypes/goal'),{label:'Anotación',updatedAt:serverTimestamp(),updatedBy:'coach'}); await catalog;
+  assert.equal((await getDoc(ref)).data().typeLabel,'Gol'); // historical snapshot is not rewritten
+});
+
+test('new events queue offline and synchronize when connection returns',async()=>{
+  const c=await newMatch('offline');
+  await getDoc(doc(c,'matches/offline'));
+  await disableNetwork(c);
+  const local=waitSnapshot(doc(c,'matches/offline/events/queued'),s=>s.exists() && s.metadata.hasPendingWrites);
+  const committed=eventBatch(c,'offline','queued',{},eventData({minute:3}),1).commit();
+  assert.equal((await local).metadata.hasPendingWrites,true);
+  await enableNetwork(c); await assertSucceeds(committed);
+  assert.equal((await getDoc(doc(db('parent'),'matches/offline/events/queued'))).data().minute,3);
+});
+
+test('summary draft is private, approval requires current event/status version',async()=>{
+  const c=await newMatch('summary'); const base={text:'Sólo hechos',sourceHash:'a'.repeat(64),sourceVersion:0,state:'DRAFT',authorUid:'coach',approvedBy:'',updatedAt:serverTimestamp()};
+  await assertSucceeds(setDoc(doc(c,'matches/summary/aiSummaries/draft'),base));
+  await assertFails(getDoc(doc(db('player'),'matches/summary/aiSummaries/draft')));
+  await assertFails(setDoc(doc(db('player'),'matches/summary/aiSummaries/published'),{...base,state:'APPROVED',approvedBy:'player',authorUid:'player'}));
+  await assertSucceeds(setDoc(doc(c,'matches/summary/aiSummaries/published'),{...base,state:'APPROVED',approvedBy:'coach'}));
+  await assertSucceeds(getDoc(doc(db('player'),'matches/summary/aiSummaries/published')));
+  await updateDoc(doc(c,'matches/summary'),{status:'in_progress',eventVersion:1,updatedBy:'coach',updatedAt:serverTimestamp()});
+  await assertFails(setDoc(doc(c,'matches/summary/aiSummaries/published'),{...base,state:'APPROVED',approvedBy:'coach'}));
+  await assertSucceeds(setDoc(doc(c,'matches/summary/aiSummaries/published'),{...base,sourceVersion:1,state:'APPROVED',approvedBy:'coach'}));
+});
+
+const content=(uid,text)=>({text,authorUid:uid,state:'VISIBLE',createdAt:serverTimestamp(),updatedAt:serverTimestamp(),updatedBy:uid});
+test('community: scoped team, comments, one reaction per user, private reports and staff moderation',async()=>{
+  const p=db('player'),parent=db('parent'),c=db('coach'); const path='teams/a/posts/post';
+  await assertSucceeds(setDoc(doc(p,path),content('player','Buen partido')));
+  await assertFails(getDoc(doc(db('unassigned'),path)));
+  await assertFails(setDoc(doc(p,'teams/b/posts/injected'),content('player','Ajeno')));
+  await assertFails(setDoc(doc(p,'teams/a/posts/forged'),content('coach','Falso')));
+  await assertSucceeds(setDoc(doc(parent,`${path}/comments/c`),content('parent','Ánimo')));
+  await assertSucceeds(setDoc(doc(parent,`${path}/reactions/parent`),{kind:'LIKE',createdAt:serverTimestamp()}));
+  await assertSucceeds(setDoc(doc(parent,`${path}/reactions/parent`),{kind:'LIKE',createdAt:serverTimestamp()}));
+  assert.equal((await getDocs(collection(p,`${path}/reactions`))).size,1);
+  await assertFails(setDoc(doc(p,`${path}/reactions/parent`),{kind:'LIKE',createdAt:serverTimestamp()}));
+  await assertSucceeds(setDoc(doc(parent,`${path}/reports/parent`),{reason:'Revisar contenido',createdAt:serverTimestamp()}));
+  await assertFails(getDoc(doc(p,`${path}/reports/parent`)));
+  await assertSucceeds(getDoc(doc(c,`${path}/reports/parent`)));
+  await assertFails(updateDoc(doc(p,path),{state:'HIDDEN',updatedBy:'player',updatedAt:serverTimestamp()}));
+  await assertSucceeds(updateDoc(doc(c,path),{state:'HIDDEN',updatedBy:'coach',updatedAt:serverTimestamp()}));
+  await assertFails(getDoc(doc(p,path)));
+  await assertFails(getDoc(doc(parent,`${path}/comments/c`)));
+  await assertFails(setDoc(doc(parent,`${path}/comments/after`),content('parent','Oculto')));
+  await assertFails(deleteDoc(doc(c,path)));
+  await assertSucceeds(getDoc(doc(c,path)));
 });

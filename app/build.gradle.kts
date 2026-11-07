@@ -1,9 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.google.services)
     alias(libs.plugins.compose.compiler)
 }
+
+val summaryProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun configString(name: String): String = "\"" + summaryProperties.getProperty(name, "")
+    .replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "").replace("\r", "") + "\""
 
 android {
     namespace = "pe.edu.esan.sportpro"
@@ -14,7 +23,10 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.1.0-s12"
+        buildConfigField("String", "SUMMARY_BASE_URL", configString("SUMMARY_BASE_URL"))
+        buildConfigField("String", "SUMMARY_API_KEY", configString("SUMMARY_API_KEY"))
+        buildConfigField("String", "SUMMARY_MODEL", configString("SUMMARY_MODEL"))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -47,6 +59,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -93,6 +106,9 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
+
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
 
     // Testing
     testImplementation(libs.junit)

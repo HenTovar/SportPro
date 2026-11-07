@@ -51,6 +51,7 @@ fun HomeScreen(navController: NavHostController) {
                 Button(onClick = { navController.navigate("teams") }, modifier = Modifier.fillMaxWidth()) { Text(if (staff) "Equipos" else "Mi equipo") }
                 Button(onClick = { navController.navigate(if (staff) "teams?pick=trainings" else "trainings/$team") }, modifier = Modifier.fillMaxWidth()) { Text("Entrenamientos y horarios") }
                 Button(onClick = { navController.navigate(if (staff) "teams?pick=matches" else "matches/$team") }, modifier = Modifier.fillMaxWidth()) { Text("Partidos") }
+                Button(onClick = { navController.navigate(if (staff) "teams?pick=community" else "community/$team") }, modifier = Modifier.fillMaxWidth()) { Text("Comunidad del equipo") }
                 if (!staff) OutlinedButton(onClick = { navController.navigate("attendanceHistory/$team/${Uri.encode(profile.playerId)}") }, modifier = Modifier.fillMaxWidth()) { Text("Calendario de asistencia") }
             }
         }

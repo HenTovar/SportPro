@@ -55,7 +55,8 @@ fun SportProNavHost(
             TeamsScreen(
                 navController = navController,
                 pickTrainings = entry.arguments?.getString("pick") == "trainings",
-                pickMatches = entry.arguments?.getString("pick") == "matches"
+                pickMatches = entry.arguments?.getString("pick") == "matches",
+                pickCommunity = entry.arguments?.getString("pick") == "community"
             )
         }
         composable("createTeam") {
@@ -75,6 +76,12 @@ fun SportProNavHost(
         }
         composable("matches/{teamId}") { entry ->
             pe.edu.esan.sportpro.ui.screens.home.MatchesScreen(entry.arguments?.getString("teamId") ?: "", navController)
+        }
+        composable("liveMatch/{matchId}") { entry ->
+            pe.edu.esan.sportpro.ui.screens.matches.LiveMatchScreen(entry.arguments?.getString("matchId") ?: "", navController)
+        }
+        composable("community/{teamId}") { entry ->
+            pe.edu.esan.sportpro.ui.screens.community.CommunityScreen(entry.arguments?.getString("teamId") ?: "", navController)
         }
         // Jugadores
         composable("players/{teamId}") { backStackEntry ->

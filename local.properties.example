@@ -1,0 +1,5 @@
+# Copiar a local.properties, que NO se versiona. No completar aquí ninguna clave.
+sdk.dir=/ruta/local/al/Android/Sdk
+SUMMARY_BASE_URL=
+SUMMARY_API_KEY=
+SUMMARY_MODEL=

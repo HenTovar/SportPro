@@ -64,7 +64,8 @@ Se retiró el UID sin formato de Inicio; no se presenta como código de vínculo
 
 La barrera superior retira el árbol de navegación (incluidos sus ViewModels y
 listeners) antes de cerrar Firebase Auth. Elimina las selecciones de equipo/hijo,
-las preferencias de notificación por cuenta y los avisos locales. Después termina
+las preferencias de notificación por cuenta, los avisos locales y las cachés de imágenes
+de Coil (memoria y disco). Después termina
 Firestore, borra su persistencia y crea una instancia nueva. No elimina datos del
 servidor. La confirmación advierte que se descartan cambios locales no sincronizados.
 La limpieza no equivale a un borrado forense seguro del almacenamiento.

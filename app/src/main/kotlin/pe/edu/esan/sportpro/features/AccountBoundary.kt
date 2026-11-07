@@ -11,9 +11,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import coil.imageLoader
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 data class AccountActions(val exit: () -> Unit = {})
 val LocalAccountActions = staticCompositionLocalOf { AccountActions() }
@@ -62,6 +65,8 @@ fun AccountBoundary(content: @Composable (generation: Int, resetToLogin: Boolean
                         appearance.all.keys.filter { it.startsWith("notifications_") }.forEach { edit.remove(it) }
                         check(edit.commit())
                         LocalNotifier(context).clear()
+                        context.imageLoader.memoryCache?.clear()
+                        withContext(Dispatchers.IO) { context.imageLoader.diskCache?.clear() }
                     }
                     override suspend fun terminateAndClearCache() {
                         val db = retiringDb ?: FirebaseFirestore.getInstance().also { retiringDb = it }

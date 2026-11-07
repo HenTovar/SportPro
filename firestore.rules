@@ -408,7 +408,9 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'children', 'teamId', 'playerId', 'coachTeamIds'])
         && request.resource.data.get('children', {}) == {} && request.resource.data.get('coachTeamIds', []) == []
         && request.resource.data.get('teamId', '') == '' && request.resource.data.get('playerId', '') == ''
-        && (resource.data.role!='JUGADOR' || resource.data.get('teamId','')=='')
+        && (resource.data.role!='JUGADOR' || resource.data.get('teamId','')==''
+          || get(/databases/$(database)/documents/teams/$(resource.data.teamId)/players/$(resource.data.playerId)).data.get('userUid','')!=uid
+          || get(/databases/$(database)/documents/teams/$(resource.data.teamId)/players/$(resource.data.playerId)).data.get('active',true)==false)
         && roleActor(uid, request.resource.data.role)
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'PENDING'
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.fromRole == resource.data.role
@@ -488,7 +490,7 @@ service cloud.firestore {
           && request.resource.data.get('retiredAt',null)==resource.data.get('retiredAt',null)
           && request.resource.data.get('retiredBy',null)==resource.data.get('retiredBy',null)
           && (request.resource.data.get('active',true)==resource.data.get('active',true) || legacyArchive())
-          && (validSports(request.resource.data) || legacyArchive())
+          && (validSports(request.resource.data) || legacyArchive() || (administrator() && resource.data.get('userUid',null) in [null,'']))
           && request.resource.data.get('parentUid', null) == resource.data.get('parentUid', null)
           && request.resource.data.get('familyRevokedAt', null) == resource.data.get('familyRevokedAt', null)
           && request.resource.data.get('familyRevokedParentUid', null) == resource.data.get('familyRevokedParentUid', null);

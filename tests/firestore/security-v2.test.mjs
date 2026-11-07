@@ -69,7 +69,8 @@ test('V1 coach scope denies foreign team, player, attendance, training, match an
  for(const uid of ['coachA','legacy','owner']){
   for(const p of ['teams/a','teams/a/players/one','teams/a/trainings/t','teams/a/attendance/x','matches/a','matches/shared','teams/a/posts/p'])await assertSucceeds(get(db(uid),p));
   for(const p of ['teams/b','teams/b/players/one','teams/b/trainings/t','teams/b/attendance/x','matches/b','teams/b/posts/p','users/playerB','users/parent'])await assertFails(get(db(uid),p));
-  await assertSucceeds(updateDoc(doc(db(uid),'teams/a/players/one'),{name:'Propio'}));await assertFails(updateDoc(doc(db(uid),'teams/b/players/one'),{name:'Ajeno'}));
+  await assertFails(updateDoc(doc(db(uid),'teams/a/players/one'),{name:'Propio'}));
+  await assertSucceeds(updateDoc(doc(db(uid),'teams/a/players/one'),{position:'PORTERO',dominantFoot:'RIGHT',updatedAt:Date.now()}));await assertFails(updateDoc(doc(db(uid),'teams/b/players/one'),{name:'Ajeno'}));
  }
  for(const p of ['teams/a','teams/b','users/parent','users/playerB'])await assertSucceeds(get(db('admin'),p));
 });

@@ -166,9 +166,10 @@ private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistori
                 Text(jugador.position.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() })
                 if (verDatosPrivados) {
                     // Sólo se renderizan fichas cuya lectura autoriza el repositorio y las reglas.
-                    Text("Talla ${jugador.height} cm · Peso ${jugador.weight} kg", style = MaterialTheme.typography.bodySmall)
-                    Text("Tel: ${jugador.phone}", style = MaterialTheme.typography.bodySmall)
-                    Text(
+                    Text("Talla ${jugador.height.takeIf { it > 0 } ?: "—"} cm · Peso ${jugador.weight.takeIf { it > 0 } ?: "—"} kg", style = MaterialTheme.typography.bodySmall)
+                    if (jugador.dateOfBirth > 0) Text("Nacimiento: " + java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(jugador.dateOfBirth)), style = MaterialTheme.typography.bodySmall)
+                    Text(if (jugador.phone.isNotBlank()) "Tel: ${jugador.phone}" else "Datos personales no disponibles", style = MaterialTheme.typography.bodySmall)
+                    if (jugador.emergencyContactName.isNotBlank() || jugador.emergencyContactPhone.isNotBlank()) Text(
                         "Emergencia: ${jugador.emergencyContactName} (${jugador.emergencyContactPhone})",
                         style = MaterialTheme.typography.bodySmall
                     )

@@ -16,6 +16,16 @@ class PlayerRepository(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage = FirebaseStorage.getInstance()
 ) {
+    private suspend fun visiblePlayer(doc: com.google.firebase.firestore.DocumentSnapshot): Player? {
+        val row = doc.toObject(Player::class.java)?.copy(id = doc.id) ?: return null
+        val linked = row.userUid?.takeIf { it.isNotBlank() } ?: return row
+        val fields = try {
+            firestore.collection("guidedProfiles").document(linked)
+                .get(com.google.firebase.firestore.Source.SERVER).await().data
+        } catch (e: CancellationException) { throw e }
+          catch (_: Exception) { null }
+        return pe.edu.esan.sportpro.data.model.PlayerPersonalFields.apply(row, fields)
+    }
     /**
      * Obtiene todos los jugadores de un equipo.
      */
@@ -32,7 +42,7 @@ class PlayerRepository(
             // se guarda en Firestore como el campo "active".
             val players = snapshot.documents
                 .filter { it.getBoolean("active") != false }
-                .mapNotNull { doc -> doc.toObject(Player::class.java)?.copy(id = doc.id) }
+                .mapNotNull { doc -> visiblePlayer(doc) }
                 .sortedBy { it.name.lowercase() }
             emit(Result.Success(players))
         } catch (e: Exception) {
@@ -54,7 +64,7 @@ class PlayerRepository(
                 .get()
                 .await()
 
-            val player = snapshot.toObject(Player::class.java)?.copy(id = snapshot.id) ?: throw Exception("Jugador no encontrado")
+            val player = visiblePlayer(snapshot) ?: throw Exception("Jugador no encontrado")
             emit(Result.Success(player))
         } catch (e: Exception) {
             if (e is CancellationException) throw e

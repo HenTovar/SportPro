@@ -1,0 +1,480 @@
+rules_version = '2';
+
+// ADMIN assigns scopes; a coach may append only a team created atomically by that same coach.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function signedIn() { return request.auth != null; }
+    function creator() {
+      return signedIn() && request.auth.token.email == 'harontovar@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+    function activeUser() {
+      // Kotlin serializa isActive como active. Un active=false prevalece sobre legado.
+      return signedIn() && profile().get('active', profile().get('isActive', false)) == true;
+    }
+    function administrator() { return activeUser() && profile().role == 'ADMIN'; }
+    function staff() {
+      return activeUser() && profile().role in ['ADMIN', 'ENTRENADOR'];
+    }
+    function coach() { return activeUser() && profile().role == 'ENTRENADOR'; }
+    function explicitCoachScope() { return profile().keys().hasAny(['coachTeamIds']); }
+    function teamStaff(teamId) {
+      let account = profile();
+      return signedIn() && account.get('active', account.get('isActive', false)) == true
+        && (account.role == 'ADMIN' || (account.role == 'ENTRENADOR' && teamId != '' && (
+          teamId in account.get('coachTeamIds', [])
+          || (!account.keys().hasAny(['coachTeamIds']) && (account.get('teamId', '') == teamId
+            || get(/databases/$(database)/documents/teams/$(teamId)).data.get('ownerId', '') == request.auth.uid)))));
+    }
+    // Exact prefix comparison, never a regex containing a caller-controlled UID.
+    // Namespaced IDs cannot claim legacy 20-character auto-ID teams.
+    function ownNewTeamId(teamId, uid) {
+      let prefix = 'coach_' + uid + '_';
+      return teamId is string && teamId.size() == prefix.size() + 20
+        && teamId[0:prefix.size()] == prefix
+        && teamId[prefix.size():teamId.size()].matches('[A-Za-z0-9]{20}');
+    }
+    function coachCreatesTeam(uid, teamId) {
+      let before = get(/databases/$(database)/documents/users/$(uid)).data;
+      let after = getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let old = before.get('coachTeamIds', null);
+      let team = getAfter(/databases/$(database)/documents/teams/$(teamId)).data;
+      return signedIn() && request.auth.uid == uid && before.role == 'ENTRENADOR'
+        && before.get('active', before.get('isActive', false)) == true
+        && old is list && old.size() < 20 && !(teamId in old)
+        && ownNewTeamId(teamId, uid) && !exists(/databases/$(database)/documents/teams/$(teamId))
+        && after.diff(before).affectedKeys().hasOnly(['coachTeamIds','lastCreatedTeamId','coachScopeBy','coachScopeAt'])
+        && after.coachTeamIds == old.concat([teamId]) && after.lastCreatedTeamId == teamId
+        && after.coachScopeBy == uid && after.coachScopeAt == request.time
+        && team.ownerId == uid && team.id == teamId && team.coachCreated == true
+        && team.keys().hasOnly(['id','name','category','description','ownerId','createdAt','updatedAt','active','coachCreated'])
+        && team.name is string && team.name.size() > 0 && team.name.size() <= 120
+        && team.get('description','') is string && team.get('description','').size() <= 2000
+        && team.category in ['SUB_10','SUB_12','SUB_15','SUB_17','PRIMERA','SENIOR']
+        && team.active == true && team.createdAt is int && team.updatedAt is int;
+    }
+    function scopedUser(data) {
+      // Coaches never get a whole family profile containing children in other teams.
+      return data.role == 'JUGADOR' && data.get('children', {}) == {}
+        && data.get('lastFamilyRevocation', null) == null && data.get('teamId', '') != '' && teamStaff(data.teamId);
+    }
+    function roleActor(uid, target) {
+      return mayApprove(target) && (administrator() || creator()
+        || scopedUser(get(/databases/$(database)/documents/users/$(uid)).data));
+    }
+    function matchStaff(matchId) {
+      let parent = getAfter(/databases/$(database)/documents/matches/$(matchId)).data;
+      return administrator() || teamStaff(parent.get('teamA', '')) || teamStaff(parent.get('teamB', ''));
+    }
+    function legacyFamilyAllowed() { return profile().get('lastFamilyRevocation', null) == null; }
+    function mayApprove(target) {
+      // Only an active ADMIN can grant staff, including when the actor is the creator.
+      return (target == 'ENTRENADOR' && activeUser() && profile().role == 'ADMIN')
+        || (target != 'ENTRENADOR' && (creator() || (activeUser()
+          && target in ['JUGADOR', 'PADRE'] && profile().role in ['ENTRENADOR', 'ADMIN'])));
+    }
+    function validRequest(uid) {
+      return request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'fromRole', 'toRole', 'status', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.fromRole == get(/databases/$(database)/documents/users/$(uid)).data.role
+        && request.resource.data.toRole in ['JUGADOR', 'PADRE', 'ENTRENADOR', 'ADMIN']
+        && request.resource.data.toRole != request.resource.data.fromRole
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.createdAt == request.time;
+    }
+    function restricted() {
+      return activeUser() && profile().role in ['JUGADOR', 'PADRE'];
+    }
+    function assignedTeam(teamId) {
+      return restricted() && teamId != '' && ((legacyFamilyAllowed() && profile().get('teamId', '') == teamId)
+        || (profile().role == 'PADRE' && teamId in profile().get('children', {})));
+    }
+    function assignedPlayer(teamId, playerId) {
+      return restricted() && teamId != '' && playerId != '' &&
+        ((legacyFamilyAllowed() && profile().get('teamId', '') == teamId && profile().get('playerId', '') == playerId)
+          || (profile().role == 'PADRE' && playerId in profile().get('children', {}).get(teamId, {})));
+    }
+    function matchReader(matchId) {
+      let matchData = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      return teamStaff(matchData.get('teamA', '')) || teamStaff(matchData.get('teamB', '')) || assignedTeam(matchData.get('teamA', ''))
+        || assignedTeam(matchData.get('teamB', ''));
+    }
+
+    // Known-code redemption: the code, family map and player ownership commit together.
+    function validFamilyClaim(code, uid) {
+      let invitation = get(/databases/$(database)/documents/familyCodes/$(code)).data;
+      let consumed = getAfter(/databases/$(database)/documents/familyCodes/$(code)).data;
+      let account = getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let child = get(/databases/$(database)/documents/teams/$(invitation.teamId)/players/$(invitation.playerId)).data;
+      let linked = getAfter(/databases/$(database)/documents/teams/$(invitation.teamId)/players/$(invitation.playerId)).data;
+      return activeUser() && profile().role == 'PADRE' && request.auth.uid == uid
+        && code.matches('[A-HJ-NP-Z2-9]{12}') && invitation.usedBy == ''
+        && (child.get('familyRevokedAt', null) == null || invitation.createdAt > child.familyRevokedAt)
+        && invitation.expiresAt > request.time && child.get('active', child.get('isActive', true)) == true
+        && (child.get('parentUid', null) == null || child.parentUid == '' || child.parentUid == uid)
+        && consumed.usedBy == uid && consumed.usedAt == request.time
+        && account.lastFamilyCode == code
+        && account.children[invitation.teamId][invitation.playerId] == {'code': code}
+        && linked.parentUid == uid;
+    }
+    function validFamilyMap(uid) {
+      let code = request.resource.data.lastFamilyCode;
+      let invitation = get(/databases/$(database)/documents/familyCodes/$(code)).data;
+      let old = resource.data.get('children', {});
+      let next = request.resource.data.children;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['children', 'lastFamilyCode'])
+        && next is map && next.size() <= 20
+        && next.diff(old).affectedKeys().hasOnly([invitation.teamId])
+        && next[invitation.teamId] is map && next[invitation.teamId].size() <= 20
+        && next[invitation.teamId].diff(old.get(invitation.teamId, {})).affectedKeys().hasOnly([invitation.playerId])
+        && validFamilyClaim(code, uid);
+    }
+    // Revoke exactly one grant; preserve siblings, other teams and unrelated fields.
+    function revocationMapMatches(old, next, team, player) {
+      let group = old.get(team, {});
+      return next is map && next.diff(old).affectedKeys().hasOnly([team])
+        && ((!(player in group) && next == old)
+          || (player in group && (
+            (!(team in next) && group.keys().hasOnly([player]))
+            || (team in next && next[team] is map && !(player in next[team])
+              && next[team].diff(group).affectedKeys().hasOnly([player])
+              && next[team].size() == group.size() - 1))));
+    }
+    function validFamilyRevocation(uid) {
+      let audit = getAfter(/databases/$(database)/documents/users/$(uid)).data.lastFamilyRevocation;
+      let before = get(/databases/$(database)/documents/users/$(uid)).data;
+      let after = getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let child = get(/databases/$(database)/documents/teams/$(audit.teamId)/players/$(audit.playerId)).data;
+      let detached = getAfter(/databases/$(database)/documents/teams/$(audit.teamId)/players/$(audit.playerId)).data;
+      let legacy = before.get('teamId', '') == audit.teamId && before.get('playerId', '') == audit.playerId;
+      return administrator() && audit.keys().hasOnly(['teamId','playerId','by','at'])
+        && audit.teamId is string && audit.teamId.size() > 0
+        && audit.playerId is string && audit.playerId.size() > 0
+        && audit.by == request.auth.uid && audit.at == request.time
+        && after.diff(before).affectedKeys().hasOnly(['children','teamId','playerId','lastFamilyRevocation'])
+        && (audit.playerId in before.get('children', {}).get(audit.teamId, {}) || legacy || child.get('parentUid', '') == uid)
+        && revocationMapMatches(before.get('children', {}), after.get('children', {}), audit.teamId, audit.playerId)
+        && ((legacy && after.get('teamId', '') == '' && after.get('playerId', '') == '')
+          || (!legacy && after.get('teamId', '') == before.get('teamId', '')
+            && after.get('playerId', '') == before.get('playerId', '')))
+        && detached.diff(child).affectedKeys().hasOnly(['parentUid','familyRevokedAt','familyRevokedParentUid'])
+        && detached.familyRevokedParentUid == uid
+        && detached.familyRevokedAt == request.time
+        && ((child.get('parentUid', '') == uid && detached.get('parentUid', null) in [null, ''])
+          || (child.get('parentUid', '') != uid && detached.get('parentUid', null) == child.get('parentUid', null)));
+    }
+
+    // Fixed server-time hourly window. A code and its issuer counter commit together.
+    function quotaStep(uid, code) {
+      let path = /databases/$(database)/documents/familyCodeQuotas/$(uid);
+      let next = getAfter(path).data;
+      return next.keys().hasOnly(['windowStart','count','lastCode'])
+        && next.windowStart is timestamp && next.count is int && next.count >= 1 && next.count <= 20
+        && next.lastCode == code && (
+          (!exists(path) && next.windowStart == request.time && next.count == 1)
+          || (exists(path) && (
+            (get(path).data.windowStart + duration.value(1, 'h') <= request.time
+              && next.windowStart == request.time && next.count == 1)
+            || (get(path).data.windowStart + duration.value(1, 'h') > request.time
+              && next.windowStart == get(path).data.windowStart && next.count == get(path).data.count + 1))));
+    }
+    match /familyCodeQuotas/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow create, update: if staff() && request.auth.uid == uid
+        && quotaStep(uid, request.resource.data.lastCode)
+        && !exists(/databases/$(database)/documents/familyCodes/$(request.resource.data.lastCode))
+        && getAfter(/databases/$(database)/documents/familyCodes/$(request.resource.data.lastCode)).data.issuedBy == uid
+        && getAfter(/databases/$(database)/documents/familyCodes/$(request.resource.data.lastCode)).data.createdAt == request.time;
+      allow list, delete: if false;
+    }
+    match /familyCodes/{code} {
+      allow get: if (staff() && !exists(/databases/$(database)/documents/familyCodes/$(code)))
+        || teamStaff(resource.data.teamId) || (activeUser() && profile().role == 'PADRE'
+        && ((resource.data.usedBy == '' && resource.data.expiresAt > request.time) || resource.data.usedBy == request.auth.uid));
+      // Queries must be team-scoped, issuer-scoped (except ADMIN), and bounded.
+      allow list: if request.query.limit != null && request.query.limit <= 100
+        && teamStaff(resource.data.teamId) && (administrator() || resource.data.issuedBy == request.auth.uid);
+      allow create: if teamStaff(request.resource.data.teamId) && code.matches('[A-HJ-NP-Z2-9]{12}')
+        && request.resource.data.keys().hasOnly(['teamId','playerId','issuedBy','createdAt','expiresAt','usedBy','usedAt'])
+        && request.resource.data.teamId is string && request.resource.data.playerId is string
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/players/$(request.resource.data.playerId))
+        && request.resource.data.issuedBy == request.auth.uid && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(30, 'm')
+        && request.resource.data.usedBy == '' && request.resource.data.usedAt == null
+        && quotaStep(request.auth.uid, code);
+      allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedBy','usedAt','name'])
+        && !request.resource.data.keys().hasAny(['name']) && validFamilyClaim(code, request.auth.uid))
+        || (administrator() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && !request.resource.data.keys().hasAny(['name']));
+      allow delete: if signedIn() && ((resource.data.usedBy != '' && resource.data.usedBy == request.auth.uid)
+        || (teamStaff(resource.data.teamId) && (administrator() || resource.data.issuedBy == request.auth.uid)
+          && (resource.data.usedBy != '' || resource.data.expiresAt <= request.time)));
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || administrator() || scopedUser(resource.data));
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'email', 'role', 'photoUrl', 'createdAt', 'active', 'isActive', 'teamId', 'playerId'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.role in ['JUGADOR', 'PADRE']
+        && request.resource.data.get('teamId', '') == ''
+        && request.resource.data.get('playerId', '') == ''
+        && request.resource.data.get('active', true) == true
+        && request.resource.data.get('isActive', true) == true;
+      // La matriz de aprobadores y la limpieza familiar se verifican en la escritura atómica.
+      allow update: if (signedIn() && request.auth.uid == uid && resource.data.role == 'ENTRENADOR'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coachTeamIds','lastCreatedTeamId','coachScopeBy','coachScopeAt'])
+        && coachCreatesTeam(uid, request.resource.data.get('lastCreatedTeamId','')))
+        || (signedIn() && request.auth.uid != uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'children', 'teamId', 'playerId', 'coachTeamIds'])
+        && request.resource.data.get('children', {}) == {} && request.resource.data.get('coachTeamIds', []) == []
+        && request.resource.data.get('teamId', '') == '' && request.resource.data.get('playerId', '') == ''
+        && roleActor(uid, request.resource.data.role)
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'PENDING'
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.fromRole == resource.data.role
+        && get(/databases/$(database)/documents/roleRequests/$(uid)).data.toRole == request.resource.data.role
+        && getAfter(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'APPROVED')
+        || (signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasAll(['children','lastFamilyCode'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['children','lastFamilyCode'])
+          && validFamilyMap(uid))
+        || (administrator() && request.resource.data.keys().hasAll(['lastFamilyRevocation'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['children','teamId','playerId','lastFamilyRevocation'])
+          && request.resource.data.lastFamilyRevocation.at == request.time && validFamilyRevocation(uid))
+        || (administrator() && resource.data.role == 'ENTRENADOR'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coachTeamIds','coachScopeBy','coachScopeAt'])
+          && request.resource.data.coachTeamIds is list && request.resource.data.coachTeamIds.size() <= 20
+          && request.resource.data.coachTeamIds.toSet().size() == request.resource.data.coachTeamIds.size()
+          && !('' in request.resource.data.coachTeamIds)
+          && request.resource.data.coachScopeBy == request.auth.uid && request.resource.data.coachScopeAt == request.time)
+        || (resource.data.role == 'JUGADOR' && resource.data.get('lastFamilyRevocation', null) == null
+          && (administrator() || (coach() && (resource.data.get('teamId', '') == '' || teamStaff(resource.data.teamId))))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId', 'playerId'])
+          && request.resource.data.teamId is string && request.resource.data.playerId is string
+          && ((request.resource.data.teamId == '' && request.resource.data.playerId == '')
+            || (request.resource.data.playerId != '' && teamStaff(request.resource.data.teamId)
+              && getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/players/$(request.resource.data.playerId)).data.get('familyRevokedParentUid', '') != uid)));
+      allow delete: if false;
+    }
+
+    match /roleRequests/{uid} {
+      allow create: if signedIn() && validRequest(uid);
+      // Query by allowed toRole: rules never return requests above the approver.
+      allow read: if signedIn() && (request.auth.uid == uid || roleActor(uid, resource.data.toRole));
+      allow update: if signedIn() && (
+        (resource.data.status in ['APPROVED', 'REJECTED'] && validRequest(uid))
+        || (request.auth.uid != uid && roleActor(uid, resource.data.toRole)
+          && resource.data.status == 'PENDING'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && (request.resource.data.status == 'REJECTED'
+            || (request.resource.data.status == 'APPROVED'
+              && get(/databases/$(database)/documents/users/$(uid)).data.role == resource.data.fromRole
+              && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == resource.data.toRole))));
+      allow delete: if false;
+    }
+
+    match /teams/{teamId} {
+      allow read: if teamStaff(teamId) || assignedTeam(teamId)
+        || (coach() && !explicitCoachScope() && resource.data.get('ownerId', '') == request.auth.uid);
+      allow create: if administrator() || (signedIn() && coachCreatesTeam(request.auth.uid, teamId));
+      // Keep coach-created roots as seals; archival uses active=false, not hard delete.
+      allow delete: if administrator() && resource.data.get('coachCreated',false) != true;
+      allow update: if (request.resource.data.get('coachCreated',null) == resource.data.get('coachCreated',null)
+        && request.resource.data.keys().hasAny(['coachCreated']) == resource.data.keys().hasAny(['coachCreated']))
+        && teamStaff(teamId) && (administrator()
+          || request.resource.data.get('ownerId','') == resource.data.get('ownerId',''));
+
+      match /players/{playerId} {
+        allow read: if teamStaff(teamId) || assignedPlayer(teamId, playerId);
+        allow create: if teamStaff(teamId) && request.resource.data.get('parentUid', null) in [null, '']
+          && request.resource.data.get('familyRevokedAt', null) == null
+          && request.resource.data.get('familyRevokedParentUid', null) == null;
+        allow update: if teamStaff(teamId)
+          && request.resource.data.get('parentUid', null) == resource.data.get('parentUid', null)
+          && request.resource.data.get('familyRevokedAt', null) == resource.data.get('familyRevokedAt', null)
+          && request.resource.data.get('familyRevokedParentUid', null) == resource.data.get('familyRevokedParentUid', null);
+        allow delete: if administrator() && resource.data.get('parentUid', null) in [null, '']
+          && resource.data.get('familyRevokedAt', null) == null && resource.data.get('familyRevokedParentUid', null) == null;
+        allow update: if administrator() && request.resource.data.get('familyRevokedParentUid', '') is string
+          && request.resource.data.familyRevokedParentUid != '' && validFamilyRevocation(request.resource.data.familyRevokedParentUid)
+          && getAfter(/databases/$(database)/documents/users/$(request.resource.data.familyRevokedParentUid)).data.lastFamilyRevocation.teamId == teamId
+          && getAfter(/databases/$(database)/documents/users/$(request.resource.data.familyRevokedParentUid)).data.lastFamilyRevocation.playerId == playerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid','familyRevokedAt','familyRevokedParentUid']);
+        allow update: if signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid'])
+          && validFamilyClaim(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode, request.auth.uid)
+          && get(/databases/$(database)/documents/familyCodes/$(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode)).data.teamId == teamId
+          && get(/databases/$(database)/documents/familyCodes/$(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode)).data.playerId == playerId;
+      }
+      match /trainings/{trainingId} {
+        allow read: if teamStaff(teamId) || assignedTeam(teamId);
+        allow write: if teamStaff(teamId);
+      }
+      match /attendance/{attendanceId} {
+        // Las consultas de lectores deben incluir whereEqualTo("playerId", asignado).
+        allow read: if teamStaff(teamId) || assignedPlayer(teamId, resource.data.playerId);
+        allow write: if teamStaff(teamId);
+      }
+    }
+
+    function boundedText(value, max) { return value is string && value.size() > 0 && value.size() <= max; }
+    function validType(d) {
+      return d.keys().hasOnly(['label','countsGoal','active','updatedBy','updatedAt'])
+        && boundedText(d.label,40) && d.countsGoal is bool && d.active is bool
+        && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+    }
+    function currentCatalog(matchId, d) {
+      let type = get(/databases/$(database)/documents/matches/$(matchId)/eventTypes/$(d.typeId)).data;
+      return type.active == true && d.typeLabel == type.label && d.countsGoal == type.countsGoal;
+    }
+    function validEvent(matchId, eventId, d) {
+      let parent = getAfter(/databases/$(database)/documents/matches/$(matchId)).data;
+      let before = get(/databases/$(database)/documents/matches/$(matchId)).data;
+      let audit = getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)/revisions/$(d.revisionId)).data;
+      return d.keys().hasOnly(['typeId','typeLabel','countsGoal','minute','teamId','player','note','voided',
+          'revision','revisionId','createdBy','updatedBy','createdAt','updatedAt'])
+        && boundedText(d.typeId,80) && boundedText(d.typeLabel,40) && d.countsGoal is bool
+        && (d.minute == null || (d.minute is int && d.minute >= 0 && d.minute <= 180))
+        && d.teamId in [parent.teamA,parent.teamB]
+        && d.player is string && d.player.size() <= 80 && d.note is string && d.note.size() <= 300
+        && d.voided is bool && d.revision is int && d.revision >= 0
+        && d.revisionId is string && d.revisionId.matches('[A-Za-z0-9-]{1,80}')
+        && d.updatedBy == request.auth.uid && d.updatedAt == request.time
+        && parent.eventVersion == before.get('eventVersion',0) + 1 && parent.lastEventId == eventId
+        && audit.actorUid == request.auth.uid && audit.eventData == d && audit.at == request.time;
+    }
+    match /matches/{matchId} {
+      allow read: if teamStaff(resource.data.get('teamA', '')) || teamStaff(resource.data.get('teamB', '')) || assignedTeam(resource.data.get('teamA', ''))
+        || assignedTeam(resource.data.get('teamB', ''));
+      allow create: if teamStaff(request.resource.data.teamA) && request.resource.data.keys().hasOnly([
+          'name','teamA','teamB','date','status','active','createdBy','eventVersion'])
+        && boundedText(request.resource.data.name,100)
+        && request.resource.data.teamA is string && request.resource.data.teamB is string
+        && request.resource.data.teamA != request.resource.data.teamB
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamA))
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamB))
+        && request.resource.data.date == request.time && request.resource.data.status == 'not_started'
+        && request.resource.data.active == true && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.eventVersion == 0;
+      allow update: if matchStaff(matchId) && (
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','eventVersion','updatedBy','updatedAt'])
+          && request.resource.data.eventVersion == resource.data.get('eventVersion',0)+1
+          && request.resource.data.status in ['not_started','in_progress','finished']
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['eventVersion','lastEventId'])
+          && request.resource.data.eventVersion == resource.data.get('eventVersion',0)+1
+          && getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.updatedAt == request.time
+          && (!exists(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId))
+            || getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.revisionId
+              != get(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.revisionId)));
+      allow delete: if false;
+      match /eventTypes/{typeId} {
+        allow read: if matchReader(matchId);
+        allow create, update: if matchStaff(matchId) && validType(request.resource.data);
+        allow delete: if false;
+      }
+      match /events/{eventId} {
+        allow read: if matchReader(matchId);
+        allow create: if matchStaff(matchId) && validEvent(matchId,eventId,request.resource.data)
+          && teamStaff(request.resource.data.teamId) && currentCatalog(matchId,request.resource.data) && request.resource.data.revision == 0
+          && request.resource.data.voided == false && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if matchStaff(matchId) && validEvent(matchId,eventId,request.resource.data)
+          && teamStaff(resource.data.teamId) && teamStaff(request.resource.data.teamId)
+          && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.revision == resource.data.revision+1 && request.resource.data.revisionId != resource.data.revisionId
+          && ((request.resource.data.typeId == resource.data.typeId && request.resource.data.typeLabel == resource.data.typeLabel
+              && request.resource.data.countsGoal == resource.data.countsGoal) || currentCatalog(matchId,request.resource.data));
+        allow delete: if false;
+        match /revisions/{revisionId} {
+          allow read: if matchReader(matchId);
+          allow create: if matchStaff(matchId)
+            && request.resource.data.keys().hasOnly(['actorUid','at','previousData','eventData'])
+            && request.resource.data.actorUid == request.auth.uid && request.resource.data.at == request.time
+            && request.resource.data.eventData == getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)).data
+            && teamStaff(request.resource.data.eventData.teamId)
+            && (!exists(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId))
+              || teamStaff(get(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)).data.teamId))
+            && request.resource.data.eventData.revisionId == revisionId
+            && ((!exists(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)) && request.resource.data.previousData == {})
+              || request.resource.data.previousData == get(/databases/$(database)/documents/matches/$(matchId)/events/$(eventId)).data);
+          allow update, delete: if false;
+        }
+      }
+      match /aiSummaries/{summaryId} {
+        allow read: if matchReader(matchId) && (staff() || summaryId == 'published');
+        allow create, update: if matchStaff(matchId) && summaryId in ['draft','published']
+          && request.resource.data.keys().hasOnly(['text','sourceHash','sourceVersion','state','authorUid','approvedBy','updatedAt'])
+          && boundedText(request.resource.data.text,8000) && request.resource.data.sourceHash.matches('[a-f0-9]{64}')
+          && request.resource.data.sourceVersion is int && request.resource.data.sourceVersion >= 0
+          && request.resource.data.authorUid == request.auth.uid && request.resource.data.updatedAt == request.time
+          && ((summaryId == 'draft' && request.resource.data.state == 'DRAFT' && request.resource.data.approvedBy == '')
+            || (request.resource.data.state == 'APPROVED' && request.resource.data.approvedBy == request.auth.uid
+              && request.resource.data.sourceVersion == get(/databases/$(database)/documents/matches/$(matchId)).data.get('eventVersion',0)));
+        allow delete: if false;
+      }
+    }
+
+    function communityMember(teamId) { return teamStaff(teamId) || assignedTeam(teamId); }
+    function visiblePost(teamId,postId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)/posts/$(postId)).data.state == 'VISIBLE';
+    }
+    match /teams/{teamId}/posts/{postId} {
+      allow read: if communityMember(teamId) && (teamStaff(teamId) || resource.data.state == 'VISIBLE');
+      allow create: if communityMember(teamId)
+        && request.resource.data.keys().hasOnly(['text','authorUid','state','createdAt','updatedAt','updatedBy'])
+        && boundedText(request.resource.data.text,1000) && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.state == 'VISIBLE' && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid;
+      allow update: if communityMember(teamId) && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+        && ((resource.data.authorUid == request.auth.uid && resource.data.state == 'VISIBLE'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text','updatedAt','updatedBy'])
+          && boundedText(request.resource.data.text,1000))
+        || (teamStaff(teamId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','updatedAt','updatedBy'])
+          && request.resource.data.state in ['VISIBLE','HIDDEN']));
+      allow delete: if false;
+      match /comments/{commentId} {
+        allow read: if communityMember(teamId) && (teamStaff(teamId) || (visiblePost(teamId,postId) && resource.data.state == 'VISIBLE'));
+        allow create: if communityMember(teamId) && visiblePost(teamId,postId)
+          && request.resource.data.keys().hasOnly(['text','authorUid','state','createdAt','updatedAt','updatedBy'])
+          && boundedText(request.resource.data.text,500) && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.state == 'VISIBLE' && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid;
+        allow update: if teamStaff(teamId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','updatedAt','updatedBy'])
+          && request.resource.data.state == 'HIDDEN' && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+        allow delete: if false;
+      }
+      match /reactions/{uid} {
+        allow read: if communityMember(teamId) && (teamStaff(teamId) || visiblePost(teamId,postId));
+        allow create, update: if communityMember(teamId) && visiblePost(teamId,postId) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['kind','createdAt']) && request.resource.data.kind == 'LIKE'
+          && request.resource.data.createdAt == request.time;
+        allow delete: if communityMember(teamId) && request.auth.uid == uid;
+      }
+      match /reports/{uid} {
+        allow read: if communityMember(teamId) && (teamStaff(teamId) || request.auth.uid == uid);
+        allow create, update: if communityMember(teamId) && visiblePost(teamId,postId) && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['reason','createdAt']) && boundedText(request.resource.data.reason,300)
+          && request.resource.data.createdAt == request.time;
+        allow delete: if false;
+      }
+    }
+
+    match /exercises/{exerciseId} {
+      allow read: if staff();
+      allow write: if administrator();
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

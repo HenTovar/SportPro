@@ -217,6 +217,170 @@ service cloud.firestore {
           && (resource.data.usedBy != '' || resource.data.expiresAt <= request.time)));
     }
 
+
+    // Guided personal data is never copied into invitation codes or AI context.
+    function validGuided(d) {
+      return d.keys().hasOnly(['uid','requestedRole','name','phone','dateOfBirth','heightCm','weightKg',
+          'position','dominantFoot','specialtyOrLicense','yearsExperience'])
+        && d.uid is string && d.name is string && d.name.size()>0 && d.name.size()<=120
+        && d.phone is string && d.phone.size()>0 && d.phone.size()<=40
+        && d.requestedRole in ['JUGADOR','PADRE','ENTRENADOR','ADMIN']
+        && (d.heightCm == null || (d.heightCm is number && d.heightCm>=30 && d.heightCm<=260))
+        && (d.weightKg == null || (d.weightKg is number && d.weightKg>=1 && d.weightKg<=500))
+        && (d.requestedRole!='JUGADOR' || (d.dateOfBirth is int && d.dateOfBirth>0
+          && d.dateOfBirth<=request.time.toMillis()
+          && (validSports(d) || (d.position==null && d.dominantFoot==null))))
+        && (d.requestedRole!='ENTRENADOR' || (d.specialtyOrLicense is string
+          && d.specialtyOrLicense.size()>0 && d.specialtyOrLicense.size()<=200
+          && d.yearsExperience is int && d.yearsExperience>=0 && d.yearsExperience<=80));
+    }
+    function validSports(d) {
+      return d.position in ['PORTERO','DEFENSA_CENTRAL','LATERAL_IZQUIERDO','LATERAL_DERECHO',
+        'CENTROCAMPISTA','EXTREMO','DELANTERO'] && d.dominantFoot in ['RIGHT','LEFT','BOTH'];
+    }
+    function guidedReader(uid) {
+      let target=get(/databases/$(database)/documents/users/$(uid)).data;
+      let child=get(/databases/$(database)/documents/teams/$(target.teamId)/players/$(target.playerId)).data;
+      return activeUser() && target.role=='JUGADOR' && target.teamId!='' && target.playerId!=''
+        && child.get('active',child.get('isActive',true))==true && child.get('userUid','')==uid
+        && (teamStaff(target.teamId) || (profile().role=='PADRE'
+          && assignedPlayer(target.teamId,target.playerId) && child.get('parentUid','')==request.auth.uid));
+    }
+    match /guidedProfiles/{uid} {
+      allow get: if activeUser() && (request.auth.uid==uid || administrator() || guidedReader(uid));
+      allow list: if false;
+      allow create: if activeUser() && validGuided(request.resource.data)
+        && request.resource.data.uid==uid
+        && (administrator() || (request.auth.uid==uid && (request.resource.data.requestedRole==profile().role
+          || (request.resource.data.requestedRole=='ENTRENADOR' && profile().role=='JUGADOR'))));
+      allow update: if activeUser() && request.resource.data.uid==uid && validGuided(request.resource.data)
+        && (administrator() || (request.auth.uid==uid && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name','phone','dateOfBirth','heightCm','weightKg','specialtyOrLicense','yearsExperience'])));
+      allow delete: if false;
+    }
+    function activeTeam(teamId) {
+      let t=get(/databases/$(database)/documents/teams/$(teamId)).data;
+      return t.get('active',t.get('isActive',false))==true;
+    }
+    function teamQuotaStep(uid,code) {
+      let path=/databases/$(database)/documents/teamCodeQuotas/$(uid);
+      let next=getAfter(path).data;
+      return next.keys().hasOnly(['windowStart','count','lastCode']) && next.lastCode==code
+        && next.count is int && next.count>=1 && next.count<=20 && next.windowStart is timestamp
+        && ((!exists(path) && next.count==1 && next.windowStart==request.time)
+          || (exists(path) && ((get(path).data.windowStart+duration.value(1,'h')<=request.time
+            && next.count==1 && next.windowStart==request.time)
+            || (get(path).data.windowStart+duration.value(1,'h')>request.time
+              && next.count==get(path).data.count+1 && next.windowStart==get(path).data.windowStart))));
+    }
+    function codeIssued(code) {
+      let d=getAfter(/databases/$(database)/documents/teamCodes/$(code)).data;
+      return !exists(/databases/$(database)/documents/teamCodes/$(code))
+        && d.issuedBy==request.auth.uid && d.createdAt==request.time && teamStaff(d.teamId);
+    }
+    match /teamCodeQuotas/{uid} {
+      allow get: if activeUser() && request.auth.uid==uid;
+      allow create,update: if staff() && request.auth.uid==uid
+        && teamQuotaStep(uid,request.resource.data.lastCode) && codeIssued(request.resource.data.lastCode);
+      allow list,delete: if false;
+    }
+    match /teamJoinStates/{teamId} {
+      allow get: if teamStaff(teamId);
+      allow create,update: if teamStaff(teamId)
+        && request.resource.data.keys().hasOnly(['code','revoked','by','at'])
+        && request.resource.data.by==request.auth.uid && request.resource.data.at==request.time
+        && ((request.resource.data.revoked==false && codeIssued(request.resource.data.code)
+          && getAfter(/databases/$(database)/documents/teamCodes/$(request.resource.data.code)).data.teamId==teamId)
+          || (resource!=null && request.resource.data.revoked==true
+            && request.resource.data.code==resource.data.code));
+      allow list,delete: if false;
+    }
+    function teamClaim(code,uid) {
+      let u=get(/databases/$(database)/documents/users/$(uid)).data;
+      let a=getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let d=get(/databases/$(database)/documents/teamCodes/$(code)).data;
+      let n=getAfter(/databases/$(database)/documents/teamCodes/$(code)).data;
+      let state=get(/databases/$(database)/documents/teamJoinStates/$(d.teamId)).data;
+      let playerId=uid+'_'+code;
+      let p=getAfter(/databases/$(database)/documents/teams/$(d.teamId)/players/$(playerId)).data;
+      let claim=getAfter(/databases/$(database)/documents/teamCodes/$(code)/claims/$(uid)).data;
+      let personal=get(/databases/$(database)/documents/guidedProfiles/$(uid)).data;
+      return signedIn() && request.auth.uid==uid && u.role=='JUGADOR' && u.get('active',u.get('isActive',false))==true
+        && u.get('teamId','')=='' && u.get('playerId','')==''
+        && code.matches('[A-HJ-NP-Z2-9]{12}') && d.expiresAt>request.time
+        && d.count is int && d.count>=0 && d.count<40 && state.code==code && state.revoked==false
+        && activeTeam(d.teamId)
+        && n.diff(d).affectedKeys().hasOnly(['count'])
+        && n.count==d.count+1
+        && a.diff(u).affectedKeys().hasOnly(['teamId','playerId','lastTeamCode'])
+        && a.teamId==d.teamId && a.playerId==playerId && a.lastTeamCode==code
+        && !exists(/databases/$(database)/documents/teamCodes/$(code)/claims/$(uid))
+        && claim=={'uid':uid,'teamId':d.teamId,'playerId':playerId,'code':code,'at':request.time}
+        && !exists(/databases/$(database)/documents/teams/$(d.teamId)/players/$(playerId))
+        && p.keys().hasOnly(['id','teamId','userUid','name','position','dominantFoot','active','joinCode','joinedAt','createdAt','updatedAt'])
+        && p.id==playerId && p.teamId==d.teamId && p.userUid==uid && p.active==true
+        && p.joinCode==code && p.joinedAt==request.time && p.createdAt is int && p.updatedAt is int
+        && validSports(personal) && p.name==personal.name && p.position==personal.position && p.dominantFoot==personal.dominantFoot;
+    }
+    match /teamCodes/{code} {
+      allow get: if activeUser() && (staff() && !exists(/databases/$(database)/documents/teamCodes/$(code))
+        || teamStaff(resource.data.teamId) || (profile().role=='JUGADOR' && profile().get('teamId','')==''));
+      allow list: if request.query.limit!=null && request.query.limit<=100 && teamStaff(resource.data.teamId);
+      allow create: if teamStaff(request.resource.data.teamId) && code.matches('[A-HJ-NP-Z2-9]{12}')
+        && request.resource.data.keys().hasOnly(['teamId','issuedBy','createdAt','expiresAt','count'])
+        && activeTeam(request.resource.data.teamId)
+        && request.resource.data.issuedBy==request.auth.uid && request.resource.data.createdAt==request.time
+        && request.resource.data.expiresAt is timestamp && request.resource.data.expiresAt>request.time
+        && request.resource.data.expiresAt<=request.time+duration.value(72,'h')
+        && request.resource.data.count==0
+        && teamQuotaStep(request.auth.uid,code)
+        && getAfter(/databases/$(database)/documents/teamJoinStates/$(request.resource.data.teamId)).data
+          =={'code':code,'revoked':false,'by':request.auth.uid,'at':request.time};
+      allow update: if teamClaim(code,request.auth.uid);
+      allow delete: if false;
+      match /claims/{uid} {
+        allow get: if activeUser() && (request.auth.uid==uid || teamStaff(resource.data.teamId));
+        allow list: if request.query.limit!=null && request.query.limit<=100 && teamStaff(resource.data.teamId);
+        allow create: if teamClaim(code,uid);
+        allow update,delete: if false;
+      }
+    }
+    function membershipExit(uid) {
+      let u=get(/databases/$(database)/documents/users/$(uid)).data;
+      let a=getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let old=get(/databases/$(database)/documents/teams/$(u.teamId)/players/$(u.playerId)).data;
+      let retired=getAfter(/databases/$(database)/documents/teams/$(u.teamId)/players/$(u.playerId)).data;
+      let event=getAfter(/databases/$(database)/documents/membershipActions/$(a.membershipActionId)).data;
+      return activeUser() && u.role=='JUGADOR' && u.teamId!='' && u.playerId!='' && old.userUid==uid
+        && old.get('active',old.get('isActive',true))==true
+        && (request.auth.uid==uid || teamStaff(u.teamId))
+        && a.diff(u).affectedKeys().hasOnly(['teamId','playerId','membershipActionId'])
+        && event=={'uid':uid,'fromTeam':u.teamId,'fromPlayer':u.playerId,'toTeam':a.teamId,'toPlayer':a.playerId,
+          'actor':request.auth.uid,'at':request.time}
+        && !exists(/databases/$(database)/documents/membershipActions/$(a.membershipActionId))
+        && retired.diff(old).affectedKeys().hasOnly(['active','retiredBy','retiredAt'])
+        && retired.active==false && retired.retiredBy==request.auth.uid && retired.retiredAt==request.time
+        && ((a.teamId=='' && a.playerId=='') || (administrator() && a.teamId!='' && a.teamId!=u.teamId
+          && a.playerId==uid+'_'+a.membershipActionId
+          && activeTeam(a.teamId)
+          && !exists(/databases/$(database)/documents/teams/$(a.teamId)/players/$(a.playerId))
+          && movedPlayer(uid,a,old)));
+    }
+    function movedPlayer(uid,a,old) {
+      let p=getAfter(/databases/$(database)/documents/teams/$(a.teamId)/players/$(a.playerId)).data;
+      return p.keys().hasOnly(['id','teamId','userUid','name','position','dominantFoot','active','joinedAt','createdAt','updatedAt'])
+        && p.id==a.playerId && p.teamId==a.teamId && p.userUid==uid && p.active==true
+        && p.name==old.name && p.position==old.position && p.dominantFoot==old.get('dominantFoot','RIGHT')
+        && p.joinedAt==request.time && p.createdAt is int && p.updatedAt is int;
+    }
+    match /membershipActions/{action} {
+      allow get: if activeUser() && (request.auth.uid==resource.data.uid || administrator() || teamStaff(resource.data.fromTeam));
+      allow list: if request.query.limit!=null && request.query.limit<=100 && (administrator() || teamStaff(resource.data.fromTeam));
+      allow create: if signedIn() && membershipExit(request.resource.data.uid)
+        && getAfter(/databases/$(database)/documents/users/$(request.resource.data.uid)).data.membershipActionId==action;
+      allow update,delete: if false;
+    }
+
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || administrator() || scopedUser(resource.data));
       allow create: if signedIn() && request.auth.uid == uid
@@ -230,13 +394,21 @@ service cloud.firestore {
         && request.resource.data.get('active', true) == true
         && request.resource.data.get('isActive', true) == true;
       // La matriz de aprobadores y la limpieza familiar se verifican en la escritura atómica.
-      allow update: if (signedIn() && request.auth.uid == uid && resource.data.role == 'ENTRENADOR'
+      allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && activeUser() && (request.auth.uid==uid || administrator())
+          && request.resource.data.name==getAfter(/databases/$(database)/documents/guidedProfiles/$(uid)).data.name)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId','playerId','lastTeamCode']) && signedIn() && request.auth.uid==uid
+          && teamClaim(request.resource.data.lastTeamCode,uid))
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId','playerId','membershipActionId']) && signedIn()
+          && membershipExit(uid))
+        || (signedIn() && request.auth.uid == uid && resource.data.role == 'ENTRENADOR'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coachTeamIds','lastCreatedTeamId','coachScopeBy','coachScopeAt'])
         && coachCreatesTeam(uid, request.resource.data.get('lastCreatedTeamId','')))
         || (signedIn() && request.auth.uid != uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'children', 'teamId', 'playerId', 'coachTeamIds'])
         && request.resource.data.get('children', {}) == {} && request.resource.data.get('coachTeamIds', []) == []
         && request.resource.data.get('teamId', '') == '' && request.resource.data.get('playerId', '') == ''
+        && (resource.data.role!='JUGADOR' || resource.data.get('teamId','')=='')
         && roleActor(uid, request.resource.data.role)
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'PENDING'
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.fromRole == resource.data.role
@@ -256,7 +428,7 @@ service cloud.firestore {
           && !('' in request.resource.data.coachTeamIds)
           && request.resource.data.coachScopeBy == request.auth.uid && request.resource.data.coachScopeAt == request.time)
         || (resource.data.role == 'JUGADOR' && resource.data.get('lastFamilyRevocation', null) == null
-          && (administrator() || (coach() && (resource.data.get('teamId', '') == '' || teamStaff(resource.data.teamId))))
+          && administrator() && resource.data.get('teamId','')=='' && !resource.data.keys().hasAny(['lastTeamCode','membershipActionId'])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId', 'playerId'])
           && request.resource.data.teamId is string && request.resource.data.playerId is string
           && ((request.resource.data.teamId == '' && request.resource.data.playerId == '')
@@ -292,24 +464,52 @@ service cloud.firestore {
         && teamStaff(teamId) && (administrator()
           || request.resource.data.get('ownerId','') == resource.data.get('ownerId',''));
 
+      function legacyArchive() {
+        return resource.data.get('userUid',null) in [null,'']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active','updatedAt'])
+          && request.resource.data.get('active',true)==false;
+      }
       match /players/{playerId} {
         allow read: if teamStaff(teamId) || assignedPlayer(teamId, playerId);
-        allow create: if teamStaff(teamId) && request.resource.data.get('parentUid', null) in [null, '']
+        allow create: if teamStaff(teamId) && request.resource.data.get('userUid',null) in [null,''] && request.resource.data.get('parentUid', null) in [null, '']
           && request.resource.data.get('familyRevokedAt', null) == null
           && request.resource.data.get('familyRevokedParentUid', null) == null;
-        allow update: if teamStaff(teamId)
+        allow create: if signedIn() && ((request.auth.uid==request.resource.data.get('userUid','')
+          && playerId==request.auth.uid+'_'+request.resource.data.get('joinCode','')
+          && teamId==get(/databases/$(database)/documents/teamCodes/$(request.resource.data.get('joinCode',''))).data.teamId
+          && teamClaim(request.resource.data.get('joinCode',''),request.auth.uid))
+          || (administrator() && membershipExit(request.resource.data.get('userUid',''))
+            && getAfter(/databases/$(database)/documents/users/$(request.resource.data.userUid)).data.teamId==teamId
+            && getAfter(/databases/$(database)/documents/users/$(request.resource.data.userUid)).data.playerId==playerId));
+        allow update: if request.resource.data.get('userUid',null)==resource.data.get('userUid',null)
+          && (((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['position','dominantFoot','updatedAt']) || legacyArchive()) && teamStaff(teamId)) || administrator())
+          && request.resource.data.get('joinCode',null)==resource.data.get('joinCode',null)
+          && request.resource.data.get('joinedAt',null)==resource.data.get('joinedAt',null)
+          && request.resource.data.get('retiredAt',null)==resource.data.get('retiredAt',null)
+          && request.resource.data.get('retiredBy',null)==resource.data.get('retiredBy',null)
+          && (request.resource.data.get('active',true)==resource.data.get('active',true) || legacyArchive())
+          && (validSports(request.resource.data) || legacyArchive())
           && request.resource.data.get('parentUid', null) == resource.data.get('parentUid', null)
           && request.resource.data.get('familyRevokedAt', null) == resource.data.get('familyRevokedAt', null)
           && request.resource.data.get('familyRevokedParentUid', null) == resource.data.get('familyRevokedParentUid', null);
-        allow delete: if administrator() && resource.data.get('parentUid', null) in [null, '']
+        allow update: if signedIn() && resource.data.get('userUid','')!='' && (
+          (request.auth.uid==resource.data.userUid && activeUser() && profile().teamId==teamId && profile().playerId==playerId
+            && resource.data.get('active',true)==true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','updatedAt'])
+            && request.resource.data.name==getAfter(/databases/$(database)/documents/guidedProfiles/$(request.auth.uid)).data.name)
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active','retiredAt','retiredBy'])
+            && get(/databases/$(database)/documents/users/$(resource.data.userUid)).data.teamId==teamId
+            && get(/databases/$(database)/documents/users/$(resource.data.userUid)).data.playerId==playerId
+            && membershipExit(resource.data.userUid)));
+        allow delete: if administrator() && resource.data.get('userUid',null) in [null,''] && resource.data.get('parentUid', null) in [null, '']
           && resource.data.get('familyRevokedAt', null) == null && resource.data.get('familyRevokedParentUid', null) == null;
-        allow update: if administrator() && request.resource.data.get('familyRevokedParentUid', '') is string
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid','familyRevokedAt','familyRevokedParentUid'])
+          && administrator() && request.resource.data.get('familyRevokedParentUid', '') is string
           && request.resource.data.familyRevokedParentUid != '' && validFamilyRevocation(request.resource.data.familyRevokedParentUid)
           && getAfter(/databases/$(database)/documents/users/$(request.resource.data.familyRevokedParentUid)).data.lastFamilyRevocation.teamId == teamId
           && getAfter(/databases/$(database)/documents/users/$(request.resource.data.familyRevokedParentUid)).data.lastFamilyRevocation.playerId == playerId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid','familyRevokedAt','familyRevokedParentUid']);
-        allow update: if signedIn()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid'])
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid'])
+          && signedIn() && profile().role=='PADRE'
           && validFamilyClaim(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode, request.auth.uid)
           && get(/databases/$(database)/documents/familyCodes/$(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode)).data.teamId == teamId
           && get(/databases/$(database)/documents/familyCodes/$(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode)).data.playerId == playerId;

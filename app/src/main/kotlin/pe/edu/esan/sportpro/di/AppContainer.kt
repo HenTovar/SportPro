@@ -14,6 +14,7 @@ import pe.edu.esan.sportpro.data.repository.ExerciseRepository
  * Proporciona instancias únicas de repositorios y servicios.
  */
 interface AppContainer {
+    val guidedAccounts: pe.edu.esan.sportpro.data.repository.GuidedAccounts
     val authRepository: AuthRepository
     val teamRepository: TeamRepository
     val playerRepository: PlayerRepository
@@ -29,6 +30,10 @@ class DefaultAppContainer : AppContainer {
     private val firebaseAuth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+
+    override val guidedAccounts: pe.edu.esan.sportpro.data.repository.GuidedAccounts by lazy {
+        pe.edu.esan.sportpro.data.repository.GuidedAccountRepository(firebaseAuth, firestore)
+    }
 
     // Repositories
     override val authRepository: AuthRepository by lazy {

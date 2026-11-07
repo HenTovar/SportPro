@@ -23,6 +23,9 @@ import coil.compose.AsyncImage
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
+import pe.edu.esan.sportpro.ui.common.boundedPhotoUpload
+import kotlinx.coroutines.TimeoutCancellationException
+import com.google.firebase.storage.UploadTask
 import kotlinx.coroutines.CancellationException
 
 import com.google.firebase.storage.FirebaseStorage
@@ -43,7 +46,6 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
     var weight by remember { mutableStateOf("") }
     var contact by remember { mutableStateOf("") }
     var userUid by remember { mutableStateOf("") }
-    var parentUid by remember { mutableStateOf("") }
     var positionExpanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -74,7 +76,6 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
                 contact = player.phone
                 photoUrl = player.photoUrl
                 userUid = document.getString("userUid").orEmpty()
-                parentUid = player.parentUid.orEmpty()
             }
             formReady = true
         } catch (e: CancellationException) {
@@ -99,15 +100,24 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
             // Iniciar carga a Cloud Storage
             scope.launch {
                 isUploadingPhoto = true
+                var upload: UploadTask? = null
                 try {
-                    requireStaff(firestore)
-                    val photoRef = storage.reference.child("players/${UUID.randomUUID()}.jpg")
-                    photoRef.putFile(uri).await()
-                    photoUrl = photoRef.downloadUrl.await().toString()
+                    boundedPhotoUpload(cancel = { upload?.cancel() }) {
+                        requireStaff(firestore)
+                        val photoRef = storage.reference.child("players/${UUID.randomUUID()}.jpg")
+                        upload = photoRef.putFile(uri)
+                        upload!!.await()
+                        photoUrl = photoRef.downloadUrl.await().toString()
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    upload?.cancel(); photoUri = null
+                    error = "La foto no pudo subirse en 20 segundos. Comprueba si Storage está habilitado. Puedes guardar sin foto."
                 } catch (e: CancellationException) {
+                    upload?.cancel()
                     throw e
                 } catch (e: Exception) {
-                    error = "Error: ${e.message}"
+                    upload?.cancel(); photoUri = null
+                    error = "No se pudo subir la foto. Comprueba si Storage está habilitado y tu conexión. Puedes guardar sin foto."
                 } finally {
                     isUploadingPhoto = false
                 }
@@ -240,11 +250,7 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
                 label = { Text("UID de la cuenta del jugador (opcional)") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true
             )
-            OutlinedTextField(
-                value = parentUid, onValueChange = { parentUid = it },
-                label = { Text("UID de la cuenta del padre (opcional)") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true
-            )
+            pe.edu.esan.sportpro.ui.navigation.FamilyCodeIssuer(teamId, playerId)
 
             if (error.isNotEmpty()) {
                 Text(error, color = MaterialTheme.colorScheme.error)
@@ -268,24 +274,22 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
                             val players = firestore.collection("teams").document(teamId).collection("players")
                             val document = playerId?.let(players::document) ?: players.document()
                             val newUserUid = userUid.trim().takeIf { it.isNotEmpty() }
-                            val newParentUid = parentUid.trim().takeIf { it.isNotEmpty() }
                             val fields = mapOf<String, Any?>(
                                 "id" to document.id, "teamId" to teamId, "name" to name.trim(),
                                 "position" to position.name, "dateOfBirth" to parsedBirthDate,
                                 "height" to parsedHeight, "weight" to parsedWeight, "phone" to contact.trim(),
-                                "photoUrl" to photoUrl, "userUid" to newUserUid, "parentUid" to newParentUid,
+                                "photoUrl" to photoUrl, "userUid" to newUserUid,
                                 "updatedAt" to System.currentTimeMillis()
                             )
                             // Read every affected profile before any write; links and player commit together.
                             firestore.runTransaction { transaction ->
                                 val previous = transaction.get(document)
                                 check(playerId == null || previous.exists()) { "El jugador ya no existe" }
-                                val oldIds = listOfNotNull(previous.getString("userUid"), previous.getString("parentUid"))
+                                val oldIds = listOfNotNull(previous.getString("userUid"))
                                     .filter { it.isNotBlank() }
                                 val targetRoles = listOfNotNull(
-                                    newUserUid?.let { it to "JUGADOR" }, newParentUid?.let { it to "PADRE" }
+                                    newUserUid?.let { it to "JUGADOR" }
                                 )
-                                require(newUserUid == null || newUserUid != newParentUid) { "Jugador y padre deben tener cuentas distintas" }
                                 val profiles = (oldIds + targetRoles.map { it.first }).distinct().associateWith { uid ->
                                     transaction.get(firestore.collection("users").document(uid))
                                 }
@@ -300,7 +304,7 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
                                         "La cuenta $uid ya está vinculada a otro jugador"
                                     }
                                 }
-                                oldIds.filter { it != newUserUid && it != newParentUid }.forEach { uid ->
+                                oldIds.filter { it != newUserUid }.forEach { uid ->
                                     val profile = profiles.getValue(uid)
                                     if (profile.exists() && profile.getString("teamId") == teamId && profile.getString("playerId") == document.id) {
                                         transaction.update(profile.reference, mapOf(

@@ -15,7 +15,7 @@ class RoleApprovalTest {
         for ((actor, allowed) in expected) for (target in UserRole.values()) {
             assertEquals("actor=$actor target=$target", target in allowed,
                 RolePolicy.canApprove(actor, false, target))
-            assertEquals("verified creator actor=$actor target=$target", true,
+            assertEquals("verified creator actor=$actor target=$target", target != UserRole.ENTRENADOR || actor == UserRole.ADMIN,
                 RolePolicy.canApprove(actor, true, target))
         }
     }

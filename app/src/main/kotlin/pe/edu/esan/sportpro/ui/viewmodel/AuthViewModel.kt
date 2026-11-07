@@ -23,7 +23,8 @@ data class AuthUiState(
     val name: String = "",
     val selectedRole: UserRole = UserRole.JUGADOR,
     val loginSuccess: Boolean = false,
-    val registerSuccess: Boolean = false
+    val registerSuccess: Boolean = false,
+    val registrationNotice: String? = null
 )
 
 /**
@@ -145,6 +146,8 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
                             isLoading = false,
                             user = result.data,
                             registerSuccess = true,
+                            registrationNotice = if (state.selectedRole == UserRole.ENTRENADOR)
+                                pe.edu.esan.sportpro.data.model.RolePolicy.coachPendingNotice else null,
                             error = null
                         )
                     }
@@ -170,6 +173,6 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
      * Limpia el estado de éxito.
      */
     fun clearSuccess() {
-        _uiState.value = _uiState.value.copy(loginSuccess = false, registerSuccess = false)
+        _uiState.value = _uiState.value.copy(loginSuccess = false, registerSuccess = false, registrationNotice = null)
     }
 }

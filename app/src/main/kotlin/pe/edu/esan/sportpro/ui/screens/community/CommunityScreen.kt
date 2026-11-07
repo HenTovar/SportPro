@@ -25,6 +25,7 @@ import pe.edu.esan.sportpro.data.model.RolePolicy
 import pe.edu.esan.sportpro.data.repository.*
 import pe.edu.esan.sportpro.di.DefaultAppContainer
 import pe.edu.esan.sportpro.ui.navigation.safeBack
+import pe.edu.esan.sportpro.ui.navigation.BindSelectedTeam
 import pe.edu.esan.sportpro.ui.viewmodel.CommunityViewModel
 import pe.edu.esan.sportpro.ui.common.*
 import pe.edu.esan.sportpro.ui.theme.SportProTheme
@@ -33,7 +34,8 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun CommunityScreen(team:String,nav:NavHostController) {
+fun CommunityScreen(team:String,nav:NavHostController,embedded:Boolean=false) {
+    BindSelectedTeam(team)
     val vm:CommunityViewModel=viewModel(key="community-$team",factory=object:ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(c:Class<T>):T =
             CommunityViewModel(team,CommunityRepository(FirebaseFirestore.getInstance(),FirebaseAuth.getInstance()),DefaultAppContainer().authRepository) as T
@@ -41,7 +43,7 @@ fun CommunityScreen(team:String,nav:NavHostController) {
     val state by vm.state.collectAsState();val moderator=RolePolicy.isStaff(state.profile?.role)
     var text by remember {mutableStateOf("")};var editing by remember {mutableStateOf<CommunityPost?>(null)}
     var report by remember {mutableStateOf<CommunityPost?>(null)};var reason by remember {mutableStateOf("")}
-    Scaffold(topBar={TopAppBar(title={Text("Comunidad")},navigationIcon={BackButton {nav.safeBack()}})}) {padding->
+    Scaffold(topBar={if(!embedded)TopAppBar(title={Text("Comunidad")},navigationIcon={pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(nav)})}) {padding->
         LazyColumn(Modifier.padding(padding),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             item {
                 SportHero("DENTRO Y FUERA DE LA CANCHA","Somos equipo","Un espacio privado para celebrar, acompañar y compartir.")

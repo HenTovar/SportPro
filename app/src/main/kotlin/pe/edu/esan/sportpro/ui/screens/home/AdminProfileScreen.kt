@@ -144,7 +144,8 @@ fun AdminRequestsScreen(navController: NavHostController) {
                                     val request = db.collection("roleRequests").document(item.uid)
                                     db.runTransaction { tx ->
                                         check(tx.get(request).getString("status") == "PENDING") { "Solicitud ya resuelta" }
-                                        if (approve) tx.update(db.collection("users").document(item.uid), "role", item.toRole.name)
+                                        if (approve) tx.update(db.collection("users").document(item.uid),
+                                            RolePolicy.approvalFields(item.toRole))
                                         tx.update(request, "status", if (approve) "APPROVED" else "REJECTED")
                                     }.await()
                                     message = if (approve) "Solicitud aprobada." else "Solicitud rechazada."

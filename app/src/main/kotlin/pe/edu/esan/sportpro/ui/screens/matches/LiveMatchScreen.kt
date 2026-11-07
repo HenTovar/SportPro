@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,7 +33,7 @@ import pe.edu.esan.sportpro.ui.common.*
 import pe.edu.esan.sportpro.ui.theme.SportProTheme
 
 @Composable
-fun LiveMatchScreen(id:String,nav:NavHostController) {
+fun LiveMatchScreen(id:String,nav:NavHostController,openEvent:Boolean=false) {
     val vm:LiveMatchViewModel=viewModel(key="live-$id",factory=object:ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST") override fun <T:ViewModel> create(c:Class<T>):T =
             LiveMatchViewModel(id,MatchRepository(FirebaseFirestore.getInstance(),FirebaseAuth.getInstance()),DefaultAppContainer().authRepository) as T
@@ -41,6 +42,12 @@ fun LiveMatchScreen(id:String,nav:NavHostController) {
     var editor by remember {mutableStateOf(false)};var editing by remember {mutableStateOf<MatchEvent?>(null)}
     var catalog by remember {mutableStateOf(false)};var summary by remember {mutableStateOf(false)}
     val staff=RolePolicy.isStaff(state.profile?.role)
+    var openedFromShortcut by rememberSaveable(id) {mutableStateOf(false)}
+    LaunchedEffect(openEvent,staff,match?.id,state.feed.types) {
+        if(openEvent&&!openedFromShortcut&&staff&&match!=null&&state.feed.types.any {it.active}) {
+            openedFromShortcut=true;editing=null;editor=true
+        }
+    }
     Scaffold(topBar={TopAppBar(title={Text("Centro del partido")},navigationIcon={BackButton {nav.safeBack()}})}) { padding ->
         LazyColumn(Modifier.padding(padding),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             item {

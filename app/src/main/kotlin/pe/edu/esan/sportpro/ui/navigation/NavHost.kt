@@ -1,6 +1,12 @@
 package pe.edu.esan.sportpro.ui.navigation
 
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
+import androidx.navigation.compose.currentBackStackEntryAsState
+import pe.edu.esan.sportpro.ui.screens.teams.TeamScreen
 import androidx.navigation.NavHostController
 import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
@@ -27,6 +33,26 @@ fun SportProNavHost(
     startDestination: String = "login",
     navController: NavHostController = rememberNavController()
 ) {
+    val entry by navController.currentBackStackEntryAsState()
+    val route = entry?.destination?.route.orEmpty()
+    val protected = route.isNotBlank() && route != "login" && route != "register"
+    val session = rememberTeamSession(if (protected) route else "")
+    LaunchedEffect(protected, session.loading, session.profile?.uid) {
+        if (protected && !session.loading && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+            navController.navigate("login") { popUpTo(navController.graph.id) { inclusive = true }; launchSingleTop = true }
+        }
+    }
+    CompositionLocalProvider(LocalTeamSession provides session) {
+        AppContentFrame(showNavigation = protected, bottomBar = {
+            MainNavigationBar(navController, route)
+        }) {
+            AppDestinations(startDestination, navController)
+        }
+    }
+}
+
+@Composable
+private fun AppDestinations(startDestination: String, navController: NavHostController) {
     NavHost(
         navController = navController,
         startDestination = startDestination
@@ -77,8 +103,12 @@ fun SportProNavHost(
         composable("matches/{teamId}") { entry ->
             pe.edu.esan.sportpro.ui.screens.home.MatchesScreen(entry.arguments?.getString("teamId") ?: "", navController)
         }
-        composable("liveMatch/{matchId}") { entry ->
-            pe.edu.esan.sportpro.ui.screens.matches.LiveMatchScreen(entry.arguments?.getString("matchId") ?: "", navController)
+        composable("liveMatch/{matchId}?event={event}", arguments = listOf(navArgument("event") { type = NavType.BoolType; defaultValue = false })) { entry ->
+            pe.edu.esan.sportpro.ui.screens.matches.LiveMatchScreen(entry.arguments?.getString("matchId") ?: "", navController,
+                openEvent = entry.arguments?.getBoolean("event") == true)
+        }
+        composable("team/{teamId}?tab={tab}", arguments = listOf(navArgument("tab") { defaultValue = "players" })) { entry ->
+            TeamScreen(entry.arguments?.getString("teamId").orEmpty(), entry.arguments?.getString("tab").orEmpty(), navController)
         }
         composable("community/{teamId}") { entry ->
             pe.edu.esan.sportpro.ui.screens.community.CommunityScreen(entry.arguments?.getString("teamId") ?: "", navController)

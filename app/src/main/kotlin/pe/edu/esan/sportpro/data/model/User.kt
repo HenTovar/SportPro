@@ -4,6 +4,7 @@ package pe.edu.esan.sportpro.data.model
  * Modelo de datos para un usuario de SportPro.
  * Contiene información del perfil y rol del usuario.
  */
+@com.google.firebase.firestore.IgnoreExtraProperties
 data class User(
     val uid: String = "",
     val name: String = "",
@@ -13,7 +14,8 @@ data class User(
     val createdAt: Long = 0,
     val isActive: Boolean = true,
     val teamId: String = "",
-    val playerId: String = ""
+    val playerId: String = "",
+    @get:com.google.firebase.firestore.Exclude val children: List<FamilyChild> = emptyList()
 )
 
 /**

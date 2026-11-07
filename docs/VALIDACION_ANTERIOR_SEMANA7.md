@@ -1,3 +1,6 @@
+> **Antecedente histórico:** el alta privilegiada de ENTRENADOR descrita abajo queda sustituida
+> desde 1.2.0/versionCode 5 por solicitud aprobada exclusivamente por ADMIN.
+
 # Antecedente histórico, anterior a Semana 12
 
 Este documento describe la versión anterior; no acredita las funciones nuevas.

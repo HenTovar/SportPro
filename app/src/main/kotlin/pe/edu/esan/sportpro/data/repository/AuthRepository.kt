@@ -29,7 +29,7 @@ class AuthRepository(
     ): Flow<Result<User>> = flow {
         try {
             emit(Result.Loading())
-            require(role in pe.edu.esan.sportpro.data.model.RolePolicy.registrationRoles) { "El administrador se asigna fuera del registro" }
+            val baseRole = pe.edu.esan.sportpro.data.model.RolePolicy.registrationBaseRole(role)
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val uid = authResult.user?.uid ?: throw Exception("No UID obtenido")
 
@@ -38,11 +38,24 @@ class AuthRepository(
                 uid = uid,
                 email = email,
                 name = name,
-                role = role,
+                role = baseRole,
                 createdAt = System.currentTimeMillis()
             )
 
             firestore.collection("users").document(uid).set(user).await()
+            if (role == UserRole.ENTRENADOR) {
+                try {
+                    // The base profile must exist before validRequest can inspect its source role.
+                    firestore.collection("roleRequests").document(uid).set(mapOf(
+                        "uid" to uid, "email" to checkNotNull(authResult.user?.email),
+                        "fromRole" to baseRole.name, "toRole" to UserRole.ENTRENADOR.name,
+                        "status" to "PENDING", "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )).await()
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    throw IllegalStateException("Tu cuenta se creó como Jugador, pero no se pudo enviar la solicitud. Inicia sesión y solicítala desde Perfil; no tienes acceso de entrenador.", e)
+                }
+            }
             emit(Result.Success(user))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -61,7 +74,7 @@ class AuthRepository(
 
             // Obtener datos del usuario desde Firestore
             val userDoc = firestore.collection("users").document(uid).get().await()
-            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id) ?: throw Exception("Usuario no encontrado")
+            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id, children = pe.edu.esan.sportpro.data.model.FamilyPolicy.decode(userDoc.get("children"))) ?: throw Exception("Usuario no encontrado")
 
             emit(Result.Success(user))
         } catch (e: Exception) {
@@ -78,7 +91,7 @@ class AuthRepository(
         val currentUser = firebaseAuth.currentUser
         if (currentUser != null) {
             val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
-            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id)
+            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id, children = pe.edu.esan.sportpro.data.model.FamilyPolicy.decode(userDoc.get("children")))
             emit(Result.Success(user))
         } else {
             emit(Result.Success(null))

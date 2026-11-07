@@ -70,3 +70,6 @@ node_modules/
 
 # Local Kotlin compiler cache
 .kotlin/
+
+# Test dependency symlink on the build host
+/tests/firestore/node_modules

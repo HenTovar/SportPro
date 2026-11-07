@@ -1,0 +1,55 @@
+# Funciones locales del equipo — WIP 1.3.0
+
+**Estado del corte: fuentes sin build final ni pruebas verdes. No instalar ni integrar como aprobado.** La compilación se detuvo por límite térmico; los casos JVM/Compose están preparados y pendientes de ejecución. Este documento describe el comportamiento previsto, no resultados en dispositivo. El APK integrado lo genera el proceso de integración tras revisión y aceptación independientes.
+
+Desde Inicio, selecciona un equipo y abre **Calendario y estadísticas**. Desde Perfil cambia el tema, el tamaño de letra y los avisos. No se necesita ninguna colección nueva ni publicar reglas para este carril; la integración de seguridad tiene su propio proceso de revisión.
+
+## Avisos locales
+
+Activa **Avisos locales** en Perfil. En Android 13 o posterior se solicita `POST_NOTIFICATIONS`; rechazarlo no impide usar la app. Se requiere que el sistema también permita las notificaciones de la aplicación.
+
+Los avisos corresponden al equipo seleccionado: un partido pasa de programado a en vivo, se confirma un gol vigente o cambia/se retira un entrenamiento. La primera carga de cada listener es silenciosa: no anuncia historia. Caché y escrituras pendientes no producen avisos. Corregir sólo el nombre de un goleador no anuncia otro gol. Los avisos no muestran nombres de menores ni contenido privado en la pantalla de bloqueo.
+
+**No son push de servidor**. Se generan mientras el proceso y el listener sigan activos, con la app abierta o en segundo plano. Android puede detenerlos, especialmente con ahorro de batería. Con la app cerrada o el proceso terminado no se garantiza recepción. No se han contratado Cloud Functions ni plan Blaze, ni añadido una colección de tokens. Una automatización de servidor sería otro proyecto.
+
+[Permiso oficial de Android](https://developer.android.com/develop/ui/compose/notifications/notification-permission).
+
+## Estadísticas: qué cuentan
+
+- Goles: eventos `countsGoal=true`, no anulados, del equipo seleccionado. Se agrupan por el **nombre escrito**: dos personas con el mismo nombre no se distinguen. Sin nombre queda `Sin identificar`. No se inventan identificadores. Correcciones y anulaciones reemplazan el evento, no acumulan goles históricos.
+- Asistencia mensual: se usa la fecha del **entrenamiento**, no la fecha en que alguien editó la marca. Se toma la última marca por jugador/sesión. Sin entrenamiento fechado se informa fuera del cálculo. El porcentaje es sobre marcas registradas, no sobre todas las sesiones; no se inventan ausencias.
+- Padre/jugador consulta sólo la asistencia de su ficha seleccionada (`where playerId`); el staff usa la asistencia del equipo autorizado. Las reglas del servidor siguen decidiendo acceso.
+- Racha: partidos finalizados y fechados, de más reciente a antiguo; compara goles vigentes a favor/en contra, incluyendo partidos como visitante. Empates interrumpen racha de victorias o derrotas. Se calcula sólo con feeds cargados y se señala información provisional si falta confirmación.
+- El selector de mes filtra calendario y asistencia. Los goleadores y la racha abarcan todos los partidos cargados, como dice cada título.
+
+## Calendario
+
+Mes real, semana de lunes a domingo y años bisiestos. El punto señala días con partido o entrenamiento. Toca un día para ver los registros y luego el registro para abrirlo. Anterior/Siguiente cambia de mes; Hoy vuelve al actual. Se usa la zona horaria del teléfono y sólo fechas válidas; los registros sin fecha se cuentan por separado. No hay fuentes de calendario externas.
+
+## Pantalla y letra
+
+Perfil permite **Sistema / Claro / Oscuro** y letra **Sistema / 130% / 150%**. Si Android ya usa una letra mayor, se respeta. Las preferencias sólo viven en este dispositivo; no cambian el perfil de Firestore.
+
+Los controles de registro se apilan; los botones crecen en vez de fijar altura; la barra inferior permite dos líneas y reserva más alto con letra grande. Calendario, controles y resultados se desplazan. El fondo y los iconos de las barras del sistema siguen el tema elegido.
+
+La revisión de código cubre todas las pantallas existentes; las pruebas Compose adicionales ejercitan calendario/estadísticas claro y oscuro a 1.3/1.5. **Compilar instrumentación no demuestra layout en teléfono**. La comprobación de píxeles, IME y todas las pantallas en dispositivo sigue siendo una prueba del cliente.
+
+## Sin internet
+
+Firestore conserva una caché persistente local configurada antes de empezar a usar la base. Permite consultar datos ya cargados; sin red no carga datos que nunca se descargaron en este dispositivo ni sustituye el primer login online. [Documentación de caché](https://firebase.google.com/docs/firestore/manage-data/enable-offline).
+
+- Sin red validada: `Sin conexión`, con aviso de datos guardados y sincronización pendiente.
+- Si los snapshots del equipo tienen cambios locales: `pendientes de sincronizar`.
+- Si llegan de caché: se distingue de confirmación del servidor. [Metadata de listeners](https://firebase.google.com/docs/firestore/query-data/listen).
+
+El indicador de pendientes corresponde a los snapshots observados del equipo; no es un inventario de todas las operaciones de toda la app. Los avisos locales necesitan una actualización confirmada del servidor. Las escrituras existentes compatibles con la cola de Firestore se sincronizan al reconectar; una transacción, aprobación o revocación que necesita servidor no se presenta como exitosa offline. La caché puede conservar información ya descargada después de una revocación: revocar corta lecturas futuras del servidor, no borra copias anteriores del dispositivo. Al cambiar de usuario/equipo se reinicia el estado del módulo y se cancelan sus listeners; cerrar sesión limpia los avisos locales, no promete borrar toda la caché de Firestore.
+
+## Pruebas del cliente
+
+1. Permiso de avisos concedido y denegado; primera carga sin avisos históricos. Con otro cliente iniciar partido, marcar gol y modificar entrenamiento. Comprobar un aviso por cambio confirmado, también en segundo plano mientras el proceso siga vivo.
+2. Dos equipos/dos familias: nunca consultar asistencia ajena. Cambiar equipo/hijo y cerrar sesión: no conservar cifras o avisos del anterior.
+3. Goles corregidos/anulados, jugador desconocido, empate y partido visitante; mes de febrero bisiesto y cambios de año; asistencia editada tarde.
+4. Claro/oscuro y letra 1.3/1.5 en login, registro, inicio, equipo, partidos, eventos, comunidad, formularios, asistencia y perfil, con IME abierto/cerrado.
+5. Cargar datos online, desconectar: caché e indicador; registrar un evento permitido por el flujo existente, comprobar pendiente, reconectar y confirmar una sola sincronización. Sin datos previos, mostrar vacío/carga honesta; no inventar acceso.
+
+No ejecutar estas pruebas con datos privados de terceros. El candidato no se acepta a sí mismo; requiere revisión independiente y aceptación del cliente.

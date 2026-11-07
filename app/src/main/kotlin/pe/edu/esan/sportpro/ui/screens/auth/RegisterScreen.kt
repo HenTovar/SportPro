@@ -95,18 +95,16 @@ fun RegisterScreen(
 
         Text("Rol:", style = MaterialTheme.typography.bodyMedium)
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             pe.edu.esan.sportpro.data.model.RolePolicy.registrationChoices.forEach { role ->
                 FilterChip(
                     selected = uiState.selectedRole == role,
                     onClick = { viewModel.setRole(role) },
                     label = { Text(if (role == UserRole.ENTRENADOR) "Entrenador (solicitud)" else pe.edu.esan.sportpro.data.model.RolePolicy.label(role)) },
-                    modifier = Modifier.weight(1f).padding(4.dp)
+                    modifier = Modifier.fillMaxWidth().heightIn(min=48.dp)
                 )
             }
         }
@@ -129,7 +127,7 @@ fun RegisterScreen(
             onClick = { viewModel.register() },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .heightIn(min = 50.dp),
             enabled = !uiState.isLoading && !uiState.registerSuccess
         ) {
             if (uiState.isLoading) {

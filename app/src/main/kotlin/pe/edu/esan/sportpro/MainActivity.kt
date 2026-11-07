@@ -16,6 +16,7 @@ import pe.edu.esan.sportpro.ui.navigation.SportProNavHost
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pe.edu.esan.sportpro.features.FirestoreOffline.configure()
         // Android 15 dibuja de borde a borde: el contenido se separa de la barra de estado,
         // la cámara (notch) y la barra de navegación en cualquier tamaño de teléfono.
         enableEdgeToEdge()

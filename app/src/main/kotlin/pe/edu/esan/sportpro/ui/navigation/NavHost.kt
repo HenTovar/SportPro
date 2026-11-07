@@ -43,10 +43,15 @@ fun SportProNavHost(
         }
     }
     CompositionLocalProvider(LocalTeamSession provides session) {
+        pe.edu.esan.sportpro.features.FeatureRuntime(session) {
         AppContentFrame(showNavigation = protected, bottomBar = {
             MainNavigationBar(navController, route)
         }) {
-            AppDestinations(startDestination, navController)
+            Column(Modifier.fillMaxSize()) {
+                pe.edu.esan.sportpro.features.ConnectionBanner()
+                Box(Modifier.weight(1f)) { AppDestinations(startDestination, navController) }
+            }
+        }
         }
     }
 }
@@ -70,6 +75,9 @@ private fun AppDestinations(startDestination: String, navController: NavHostCont
             HomeScreen(navController = navController)
         }
 
+        composable("teamFeatures/{teamId}") { entry ->
+            pe.edu.esan.sportpro.features.TeamFeaturesScreen(entry.arguments?.getString("teamId").orEmpty(),navController)
+        }
         composable("profile") {
             pe.edu.esan.sportpro.ui.screens.home.AdminProfileScreen(navController)
         }

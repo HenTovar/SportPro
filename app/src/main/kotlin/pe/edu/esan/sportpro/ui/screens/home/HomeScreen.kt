@@ -114,6 +114,7 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
                     ActionTile("Mis partidos", "Agenda y marcadores de mi equipo", Icons.Default.PlayArrow, { onNavigate("matches/${StructurePolicy.component(team)}") })
                 }
                 ActionTile("Muro del equipo", "Publicaciones y conversaciones", Icons.Default.Favorite, { onNavigate("community/${StructurePolicy.component(team)}") })
+                ActionTile("Calendario y estadísticas", "Agenda mensual, goles y asistencia", Icons.Default.DateRange, { onNavigate("teamFeatures/${StructurePolicy.component(team)}") })
                 ActionTile("Ficha del equipo", "Plantel · entrenamientos · partidos · muro", Icons.Default.Person, { onNavigate(StructurePolicy.team(team)) })
             }
             if (!staff && profile.role != UserRole.PADRE) SelectionContainer { Text("Código para tu entrenador: ${profile.uid}", style = MaterialTheme.typography.bodySmall) }

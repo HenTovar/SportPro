@@ -22,8 +22,8 @@ android {
         applicationId = "pe.edu.esan.sportpro"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.2.0"
+        versionCode = 10
+        versionName = "1.3.0"
         buildConfigField("String", "SUMMARY_BASE_URL", configString("SUMMARY_BASE_URL"))
         buildConfigField("String", "SUMMARY_API_KEY", configString("SUMMARY_API_KEY"))
         buildConfigField("String", "SUMMARY_MODEL", configString("SUMMARY_MODEL"))

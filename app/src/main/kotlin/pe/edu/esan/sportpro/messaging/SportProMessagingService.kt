@@ -14,17 +14,17 @@ class SportProMessagingService : FirebaseMessagingService() {
      * Llamado cuando se recibe un mensaje desde Firebase Cloud Messaging.
      */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        Timber.d("Mensaje recibido de: ${remoteMessage.from}")
+        Timber.d("Mensaje remoto recibido")
 
         // Procesar datos del mensaje
         if (remoteMessage.data.isNotEmpty()) {
-            Timber.d("Datos del mensaje: ${remoteMessage.data}")
+            Timber.d("Mensaje con datos; sin volcado de contenido")
             handleNotification(remoteMessage.data)
         }
 
         // Procesar notificación
         remoteMessage.notification?.let {
-            Timber.d("Título: ${it.title}, Cuerpo: ${it.body}")
+            Timber.d("Mensaje con aviso remoto")
         }
     }
 
@@ -32,7 +32,7 @@ class SportProMessagingService : FirebaseMessagingService() {
      * Llamado cuando se genera un nuevo token de registro.
      */
     override fun onNewToken(token: String) {
-        Timber.d("Token FCM generado: $token")
+        // No registrar tokens ni enviarlos a colecciones nuevas.
         // Aquí se debe enviar el token al servidor para almacenarlo
         // en la base de datos asociado al usuario actual
     }
@@ -43,13 +43,13 @@ class SportProMessagingService : FirebaseMessagingService() {
     private fun handleNotification(data: Map<String, String>) {
         when (val type = data["type"]) {
             "training" -> {
-                Timber.d("Notificación de entrenamiento: ${data["message"]}")
+                Timber.d("Tipo de mensaje: entrenamiento")
             }
             "match" -> {
-                Timber.d("Notificación de partido: ${data["message"]}")
+                Timber.d("Tipo de mensaje: partido")
             }
             "attendance" -> {
-                Timber.d("Notificación de asistencia: ${data["message"]}")
+                Timber.d("Tipo de mensaje: asistencia")
             }
             else -> {
                 Timber.d("Tipo de notificación desconocida: $type")

@@ -44,7 +44,8 @@ fun TeamCodeScreen(teamId: String, nav: NavHostController) {
         if (session.loading || busy) CircularProgressIndicator()
         if (!session.loading && !allowed) Text("Sólo el personal autorizado de este equipo puede generar el código.")
         Text("El código dura 72 horas o hasta 40 incorporaciones. Generar otro revoca el anterior. Máximo 20 emisiones por hora por persona autorizada.")
-        code?.let { Text(it, style = MaterialTheme.typography.headlineSmall) }
+        TeamCodeDisplay(code = code, allowed = allowed, busy = busy,
+            onCopied = { message = "Código de equipo copiado." })
         message?.let { Text(it) }
         Button(enabled = allowed && !busy, onClick = {
             busy = true; message = null; code = null

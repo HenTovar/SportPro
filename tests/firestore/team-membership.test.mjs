@@ -23,6 +23,8 @@ async function join(uid='u1',v=code(2),opts={}){
  const d=db(uid),c=ref(d,'teamCodes/'+v),u=ref(d,'users/'+uid);
  return runTransaction(d,async tx=>{await tx.get(u);const gift=await tx.get(c),p=await tx.get(ref(d,'guidedProfiles/'+uid));const x=gift.data();if(!x)throw Object.assign(new Error('absent'),{code:'not-found'});
  const team=opts.team??x.teamId,pid=opts.pid??uid+'_'+v,parts=opts.parts??['user','code','player','claim'];
+ await tx.get(ref(d,`teamCodes/${v}/claims/${uid}`));
+ if(opts.androidPreRead)await tx.get(ref(d,`teams/${team}/players/${pid}`));
  if(parts.includes('code'))tx.update(c,{count:x.count+1,...(opts.codeExtra??{})});
  if(parts.includes('user'))tx.update(u,{teamId:team,playerId:pid,lastTeamCode:v,...(opts.userExtra??{})});
  const row={id:pid,teamId:team,userUid:uid,name:p.data().name,position:p.data().position,dominantFoot:p.data().dominantFoot,active:true,joinCode:v,joinedAt:serverTimestamp(),createdAt:Date.now(),updatedAt:Date.now(),...(opts.playerExtra??{})};
@@ -87,3 +89,48 @@ test('32 legacy isActive=false team cannot issue or redeem, explicit restoration
 test('33 role approval cannot orphan active membership; retirement first permits approval',async()=>{await issue();await join();const u=db('u1'),a=db('admin');await setDoc(ref(u,'roleRequests/u1'),{uid:'u1',email:'u1@example.test',fromRole:'JUGADOR',toRole:'ENTRENADOR',status:'PENDING',createdAt:serverTimestamp()});const approve=()=>{const b=writeBatch(a);b.update(ref(a,'users/u1'),{role:'ENTRENADOR',teamId:'',playerId:'',children:{},coachTeamIds:[]});b.update(ref(a,'roleRequests/u1'),{status:'APPROVED'});return b.commit()};await deny(approve());await exit();await approve();assert.equal((await read(['users/u1']))['users/u1'].role,'ENTRENADOR')});
 
 test('34 historical revoked family scope fails before creating an unreadable membership',async()=>{await issue();await seed({'users/u1':{uid:'u1',role:'JUGADOR',active:true,teamId:'',playerId:'',lastFamilyRevocation:{teamId:'old',playerId:'old',at:stamp(),by:'admin'}}});await deny(join());const s=await read(['users/u1','teamCodes/'+code(2)]);assert.equal(s['users/u1'].teamId,'');assert.equal(s['teamCodes/'+code(2)].count,0);await join('u2')});
+
+test('J01 actual Android join pre-read contract creates a fresh membership',async()=>{
+ await issue();
+ const kotlin=readFileSync(process.env.SPORTPRO_ANDROID_REPO || new URL('../../app/src/main/kotlin/pe/edu/esan/sportpro/data/repository/GuidedAccountRepository.kt',import.meta.url),'utf8');
+ const androidPreRead=kotlin.includes('check(!tx.get(player(team,pid)).exists())');
+ try {await join('u1',code(2),{androidPreRead});}
+ catch(error){
+   const state=await read(['users/u1','teamCodes/'+code(2),'teams/a/players/u1_'+code(2),'teamCodes/'+code(2)+'/claims/u1']);
+   assert.equal(state['users/u1'].teamId,'');assert.equal(state['teamCodes/'+code(2)].count,0);
+   assert.equal(state['teams/a/players/u1_'+code(2)],null);assert.equal(state['teamCodes/'+code(2)+'/claims/u1'],null);
+   records.push({case:'J01',androidPreRead,error:error.code,atomicNoEffects:true});throw error;
+ }
+ const state=await read(['users/u1','teamCodes/'+code(2),'teams/a/players/u1_'+code(2),'teamCodes/'+code(2)+'/claims/u1']);
+ assert.equal(state['users/u1'].teamId,'a');assert.equal(state['teamCodes/'+code(2)].count,1);
+ assert.equal(state['teams/a/players/u1_'+code(2)].userUid,'u1');assert.equal(state['teamCodes/'+code(2)+'/claims/u1'].uid,'u1');
+ records.push({case:'J01',androidPreRead,joined:true,exactlyOneClaim:true});
+});
+
+test('J02 direct absent and foreign player reads remain denied, current member succeeds',async()=>{
+ await issue();const path='teams/a/players/u1_'+code(2);
+ if(process.env.SPORTPRO_BRIDGE==='1')assert.equal((await getDocFromServer(ref(db('u1'),path))).exists(),false);
+ else await deny(getDocFromServer(ref(db('u1'),path)));
+ await join();await getDocFromServer(ref(db('u1'),path));
+ await deny(getDocFromServer(ref(db('u2'),path)));
+ await deny(getDocFromServer(ref(db('u2'),'guidedProfiles/u1')));
+});
+
+test('J03 deterministic player collision cannot overwrite or consume a code',async()=>{
+ await issue();const path='teams/a/players/u1_'+code(2);
+ const existing={id:'old',name:'Preservar ficha',userUid:'someone-else',active:true};await seed({[path]:existing});
+ await deny(join());const state=await read([path,'users/u1','teamCodes/'+code(2),'teamCodes/'+code(2)+'/claims/u1']);
+ assert.deepEqual(state[path],existing);assert.equal(state['users/u1'].teamId,'');
+ assert.equal(state['teamCodes/'+code(2)].count,0);assert.equal(state['teamCodes/'+code(2)+'/claims/u1'],null);
+});
+
+test('B01 bridge never grants old existing row, arbitrary slot, inactive or foreign user',async()=>{
+ await issue();const path='teams/a/players/u1_'+code(2);
+ await deny(getDocFromServer(ref(db('u2'),path)));
+ await deny(getDocFromServer(ref(db('u1'),'teams/a/players/u1_NOTTHECODE22')));
+ await seed({[path]:{id:'old',userUid:'u1',name:'Private historical row',active:false}});
+ await deny(getDocFromServer(ref(db('u1'),path)));
+ await seed({'users/u3':{uid:'u3',role:'JUGADOR',active:false,teamId:'',playerId:''}});
+ await deny(getDocFromServer(ref(db('u3'),'teams/a/players/u3_'+code(2))));
+ await deny(getDocs(collection(db('u2'),'teams/a/players')));
+});

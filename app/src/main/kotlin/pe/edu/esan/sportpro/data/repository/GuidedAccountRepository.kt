@@ -102,7 +102,9 @@ class GuidedAccountRepository(private val auth: FirebaseAuth, private val firest
             check(gift.exists() && p.exists()) { "Código o datos no disponibles" }
             val team=checkNotNull(gift.getString("teamId"));val pid=id+"_"+normalized
             val claim=ref.collection("claims").document(id);check(!tx.get(claim).exists()) { "Ya utilizaste este código" }
-            check(!tx.get(player(team,pid)).exists()) { "La ficha ya existe" }
+            // Do not GET the future player row: membership read access starts
+            // only after this transaction commits. Rules teamClaim enforce
+            // non-existence atomically, so an existing row cannot be replaced.
             val n=gift.getLong("count") ?: 40L;check(n<40) { "El código no tiene cupos" }
             tx.update(ref,mapOf("count" to n+1))
             tx.update(user(id),mapOf("teamId" to team,"playerId" to pid,"lastTeamCode" to normalized))

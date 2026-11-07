@@ -79,8 +79,6 @@ data class GuidedFormDraft(
         }
         fun validOptionalRange(value: String, range: ClosedFloatingPointRange<Double>): Boolean = value.isBlank() ||
             value.trim().toDoubleOrNull()?.let { it.isFinite() && it in range } == true
-        fun validOptionalPositive(value: String): Boolean = value.isBlank() ||
-            value.trim().toDoubleOrNull()?.let { it.isFinite() && it > 0 } == true
         fun optionalNumber(value: String): Double? = value.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
     }
 }

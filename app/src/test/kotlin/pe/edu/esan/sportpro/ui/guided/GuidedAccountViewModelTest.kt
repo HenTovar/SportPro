@@ -21,7 +21,7 @@ class GuidedAccountViewModelTest {
         var registrations = 0; var joins = 0; var leaves = mutableListOf<String>(); var saves = 0
         var failLoad = false; var failJoin = false
         override fun register(email: String, password: String, profile: GuidedProfile) = flow<Result<User>> {
-            registrations++; emit(Result.Loading); emit(Result.Success(User(uid = "test-user", role = UserRole.JUGADOR)))
+            registrations++; emit(Result.Loading()); emit(Result.Success(User(uid = "test-user", role = UserRole.JUGADOR)))
         }
         override suspend fun loadMyData(): GuidedProfile { if (failLoad) error("internal-load-error"); return profile }
         override suspend fun saveMyData(profile: GuidedProfile) { saves++; this.profile = profile }
@@ -60,6 +60,14 @@ class GuidedAccountViewModelTest {
         advanceUntilIdle(); assertEquals(0, repo.joins)
         vm.save(); advanceUntilIdle(); vm.join("TEAMCODE"); advanceUntilIdle()
         assertEquals(1, repo.saves); assertEquals(1, repo.joins)
+    }
+    @Test fun savingNormalizesFormattingWithoutLeavingJoinPermanentlyDirty() = runTest {
+        val repo = Fake(player()); val vm = GuidedAccountViewModel(repo)
+        vm.load(); advanceUntilIdle()
+        vm.change(vm.state.value.draft.copy(name = " Nombre actualizado ", heightCm = "170"))
+        vm.save(); advanceUntilIdle(); vm.join("TEAMCODE"); advanceUntilIdle()
+        assertEquals(1, repo.saves); assertEquals(1, repo.joins)
+        assertEquals("Nombre actualizado", vm.state.value.draft.name)
     }
     @Test fun leaveUsesExpectedTeamAndRefreshesAfterConfirmedSuccess() = runTest {
         val repo = Fake(player()); val vm = GuidedAccountViewModel(repo)

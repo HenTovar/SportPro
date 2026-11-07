@@ -41,8 +41,19 @@ class GuidedFormDraftTest {
         assertTrue(ProfileField.BIRTH_DATE in player().copy(birthDate = "2099-01-01").errors(FormAccess.REGISTRATION, now))
     }
     @Test fun optionalPhysicalNumbersRejectNonfiniteAndNonpositive() {
-        assertTrue(GuidedFormDraft.validOptionalPositive(""));assertTrue(GuidedFormDraft.validOptionalPositive("170.5"))
-        listOf("NaN", "Infinity", "1e309", "-1", "0", "wrong").forEach { assertFalse(it, GuidedFormDraft.validOptionalPositive(it)) }
+        assertTrue(player().errors(FormAccess.REGISTRATION, now).isEmpty())
+        assertTrue(player().copy(heightCm = "170.5", weightKg = "65").errors(FormAccess.REGISTRATION, now).isEmpty())
+        listOf("NaN", "Infinity", "1e309", "-1", "0", "wrong").forEach {
+            assertTrue(it, ProfileField.HEIGHT in player().copy(heightCm = it).errors(FormAccess.REGISTRATION, now))
+            assertTrue(it, ProfileField.WEIGHT in player().copy(weightKg = it).errors(FormAccess.REGISTRATION, now))
+        }
+    }
+    @Test fun numericLimitsMatchTheAgreedRepositoryContract() {
+        assertTrue(player().copy(heightCm = "30", weightKg = "500").errors(FormAccess.REGISTRATION, now).isEmpty())
+        assertTrue(ProfileField.HEIGHT in player().copy(heightCm = "261").errors(FormAccess.REGISTRATION, now))
+        assertTrue(ProfileField.WEIGHT in player().copy(weightKg = "501").errors(FormAccess.REGISTRATION, now))
+        val coach = GuidedFormDraft(UserRole.ENTRENADOR, "Persona Ficticia", "999111222", specialtyOrLicense = "Licencia", yearsExperience = "81")
+        assertTrue(ProfileField.EXPERIENCE in coach.errors(FormAccess.REGISTRATION, now))
     }
     @Test fun selfCannotEditSportsAndCoachCannotEditPersonal() {
         val p = player()

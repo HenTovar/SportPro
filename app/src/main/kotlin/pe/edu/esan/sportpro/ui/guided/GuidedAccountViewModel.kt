@@ -69,7 +69,7 @@ class GuidedAccountViewModel(private val accounts: GuidedAccounts) : ViewModel()
     }
     fun join(code: String) {
         if (!mutable.value.loaded || code.isBlank()) return
-        if (original?.asDraft() != mutable.value.draft) {
+        if (original != mutable.value.draft.asProfile(original)) {
             mutable.update { it.copy(message = "Guarda tus datos antes de unirte al equipo.") }; return
         }
         perform("Te uniste al equipo. Tu ficha se creó con tus datos.") { accounts.joinTeam(code.trim()) }
@@ -85,7 +85,7 @@ class GuidedAccountViewModel(private val accounts: GuidedAccounts) : ViewModel()
             try {
                 operation()
                 original = mutable.value.draft.asProfile(original)
-                mutable.update { it.copy(message = success, revision = it.revision + 1) }
+                mutable.update { it.copy(draft = checkNotNull(original).asDraft(), message = success, revision = it.revision + 1) }
             } catch (e: CancellationException) { throw e }
               catch (e: Exception) { mutable.update { it.copy(message = "No se confirmó el cambio. Revisa tu sesión y el estado del equipo antes de reintentar.") } }
             finally { mutable.update { it.copy(busy = false) } }

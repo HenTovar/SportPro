@@ -166,7 +166,7 @@ fun AttendanceRecordItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(60.dp)
+            .heightIn(min = 60.dp)
     ) {
         Row(
             modifier = Modifier

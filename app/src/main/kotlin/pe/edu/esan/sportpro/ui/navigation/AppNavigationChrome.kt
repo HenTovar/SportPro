@@ -15,7 +15,8 @@ import pe.edu.esan.sportpro.ui.common.BackButton
 fun MainNavigationBar(nav: NavHostController, route: String) {
     val session = LocalTeamSession.current
     val team = session.selected?.id
-    NavigationBar {
+    val largeText=androidx.compose.ui.platform.LocalDensity.current.fontScale>1.2f
+    NavigationBar(modifier=Modifier.heightIn(min=if(largeText)104.dp else 80.dp)) {
         StructurePolicy.destinations(session.profile).forEach { label ->
             val selected = when (label) {
                 "Inicio" -> route == "home"
@@ -43,7 +44,7 @@ fun MainNavigationBar(nav: NavHostController, route: String) {
                     popUpTo("home") { inclusive = false }
                     launchSingleTop = true
                 }
-            }, icon = { Icon(icon, contentDescription = label) }, label = { Text(StructurePolicy.navigationLabel(label), maxLines = 1, softWrap = false) })
+            }, icon = { Icon(icon, contentDescription = label) }, label = { Text(StructurePolicy.navigationLabel(label), maxLines = 2, softWrap = true) })
         }
     }
 }
@@ -56,7 +57,7 @@ fun TeamSelector(modifier: Modifier = Modifier, onManage: (() -> Unit)? = null) 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             OutlinedButton(onClick = { expanded = true }, enabled = !session.loading && session.teams.isNotEmpty(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                 Icon(Icons.Default.Person, null); Spacer(Modifier.width(8.dp))
-                Text(session.selected?.name ?: "Seleccionar equipo", maxLines = 1)
+                Text(session.selected?.name ?: "Seleccionar equipo", maxLines = 2)
             }
             onManage?.let { TextButton(onClick = it) { Text("Ver equipos") } }
         }

@@ -87,7 +87,7 @@ fun LoginScreen(
             onClick = { viewModel.login() },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .heightIn(min = 50.dp),
             enabled = !uiState.isLoading
         ) {
             if (uiState.isLoading) {

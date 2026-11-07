@@ -42,6 +42,9 @@ fun AdminProfileScreen(navController: NavHostController) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Perfil", style = MaterialTheme.typography.headlineMedium)
+        pe.edu.esan.sportpro.features.AccountControls()
+        HorizontalDivider()
+        pe.edu.esan.sportpro.features.FeaturePreferences(auth.currentUser?.uid.orEmpty())
         Text(auth.currentUser?.email.orEmpty())
         Text("Rol: ${if (creator) "Creador" else RolePolicy.label(role)}")
         if (role == UserRole.ADMIN) pe.edu.esan.sportpro.ui.navigation.CoachAssignments()

@@ -57,8 +57,7 @@ fun HomeScreen(navController: NavHostController) {
         isCreator(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser),
         onNavigate = { navController.navigate(it) { launchSingleTop = true } },
         onLogout = {
-            container.authRepository.logout()
-            navController.navigate("login") { popUpTo(navController.graph.id) { inclusive = true }; launchSingleTop = true }
+            navController.navigate("profile") { launchSingleTop = true }
         }, selectedTeam = session.selected, matches = matches, trainings = trainings, onRefresh = { revision++ }, agendaLoading = matchesLoading || trainingsLoading, familyContent = { FamilyLinkControls(session) })
 }
 
@@ -88,7 +87,7 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
             if (profile.role == UserRole.PADRE) familyContent()
             TeamSelector(onManage = { onNavigate("teams") })
             if (team.isBlank() && !loading) EmptyState(Icons.Default.Person, "Elige tu equipo",
-                if (staff) "Crea o selecciona un equipo para ver su agenda." else if (profile.role == UserRole.PADRE) "Pide al entrenador un código e introdúcelo en Mis hijos." else "Comparte tu UID con el entrenador para vincular tu ficha.")
+                if (staff) "Crea o selecciona un equipo para ver su agenda." else if (profile.role == UserRole.PADRE) "Pide al entrenador un código e introdúcelo en Mis hijos." else "Pide al entrenador que vincule tu ficha desde el equipo.")
             if (team.isNotBlank()) {
                 SectionHeading("Hoy en ${selectedTeam?.name.orEmpty()}", "Agenda del equipo seleccionado")
                 TextButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, null); Text("Actualizar agenda") }
@@ -114,14 +113,14 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
                     ActionTile("Mis partidos", "Agenda y marcadores de mi equipo", Icons.Default.PlayArrow, { onNavigate("matches/${StructurePolicy.component(team)}") })
                 }
                 ActionTile("Muro del equipo", "Publicaciones y conversaciones", Icons.Default.Favorite, { onNavigate("community/${StructurePolicy.component(team)}") })
+                ActionTile("Calendario y estadísticas", "Agenda mensual, goles y asistencia", Icons.Default.DateRange, { onNavigate("teamFeatures/${StructurePolicy.component(team)}") })
                 ActionTile("Ficha del equipo", "Plantel · entrenamientos · partidos · muro", Icons.Default.Person, { onNavigate(StructurePolicy.team(team)) })
             }
-            if (!staff && profile.role != UserRole.PADRE) SelectionContainer { Text("Código para tu entrenador: ${profile.uid}", style = MaterialTheme.typography.bodySmall) }
         }
         HorizontalDivider()
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { onNavigate("profile") }) { Text("Mi perfil") }
-            TextButton(onClick = onLogout) { Text("Cerrar sesión") }
+            TextButton(onClick = onLogout) { Text("Cuenta y sesión") }
         }
     }
 }

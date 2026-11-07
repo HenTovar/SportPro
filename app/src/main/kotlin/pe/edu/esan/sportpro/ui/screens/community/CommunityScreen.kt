@@ -43,7 +43,7 @@ fun CommunityScreen(team:String,nav:NavHostController,embedded:Boolean=false) {
     val state by vm.state.collectAsState();val moderator=RolePolicy.isStaff(state.profile?.role)
     var text by remember {mutableStateOf("")};var editing by remember {mutableStateOf<CommunityPost?>(null)}
     var report by remember {mutableStateOf<CommunityPost?>(null)};var reason by remember {mutableStateOf("")}
-    Scaffold(topBar={if(!embedded)TopAppBar(title={Text("Comunidad")},navigationIcon={BackButton {nav.safeBack()}})}) {padding->
+    Scaffold(topBar={if(!embedded)TopAppBar(title={Text("Comunidad")},navigationIcon={pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(nav)})}) {padding->
         LazyColumn(Modifier.padding(padding),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             item {
                 SportHero("DENTRO Y FUERA DE LA CANCHA","Somos equipo","Un espacio privado para celebrar, acompañar y compartir.")

@@ -55,31 +55,13 @@ fun MatchesScreen(teamId:String,navController:NavHostController,embedded:Boolean
         teams=emptyList()
         if(staff)container.teamRepository.getAllTeams().collect {if(it is Result.Success)teams=it.data.filter {t->t.isActive&&t.id!=teamId}}
     }
-    Scaffold(topBar={if(!embedded)TopAppBar(title={Text("Partidos del equipo")},navigationIcon={BackButton {navController.safeBack()}})}) { padding ->
-        Column(Modifier.padding(padding).padding(16.dp)) {
-            if(!embedded)SportHero("EL FÚTBOL SE VIVE AQUÍ","Día de partido","Sigue cada jugada. Comparte cada momento.")
-            Spacer(Modifier.height(16.dp))
-            if(staff)Button(onClick={create=true},modifier=Modifier.heightIn(min=48.dp)){Text("Crear partido")}
-            Spacer(Modifier.height(12.dp))
-            if(loading)CircularProgressIndicator()
-            error?.let {MessageNotice(it,true)}
-            if(!loading&&error==null&&rows.isEmpty())EmptyState(Icons.Default.PlayArrow,"Tu próximo encuentro está por llegar","El entrenador puede crear el primer partido con un rival registrado.")
-            OutlinedTextField(query,{query=it},label={Text("Buscar partido")},singleLine=true,modifier=Modifier.fillMaxWidth())
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                listOf("" to "Todos","not_started" to "Próximos","in_progress" to "En vivo","finished" to "Finalizados").forEach { (value,label) ->
-                    FilterChip(selected=status==value,onClick={status=value},label={Text(label)})
-                }
-            }
-            val filtered=StructurePolicy.matches(rows,query,status.ifBlank {null})
-            if(rows.isNotEmpty()&&filtered.isEmpty())Text("No hay partidos con esos filtros")
-            LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp)) {items(filtered,key={it.id}) {row->ElevatedCard(Modifier.fillMaxWidth(),elevation=CardDefaults.elevatedCardElevation(defaultElevation=2.dp)) {Column(Modifier.padding(16.dp)) {
-                Text(row.name,style=MaterialTheme.typography.titleMedium)
-                Text(if(row.date>0)SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(Date(row.date)) else "Fecha pendiente")
-                StatusBadge(when(row.status){"finished"->"Finalizado";"in_progress"->"En curso";else->"Programado"},if(row.status=="in_progress")BadgeTone.Positive else BadgeTone.Neutral)
-                Button(onClick={navController.navigate("liveMatch/${Uri.encode(row.id)}")}){Text("Abrir en vivo")}
-            }}}}
-        }
+    Scaffold(topBar={if(!embedded)TopAppBar(title={Text("Partidos del equipo")},navigationIcon={pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(navController)})}) { padding ->
+        MatchListContent(rows, loading, error, staff, embedded, query, status,
+            onQuery = { query = it }, onStatus = { status = it }, onCreate = { create = true },
+            onOpen = { navController.navigate("liveMatch/" + Uri.encode(it)) },
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding))
     }
+
     if(create)AlertDialog(onDismissRequest={if(!saving)create=false},title={Text("Nuevo partido")},text={Column {
         OutlinedTextField(name,{name=it},label={Text("Nombre del partido")})
         Text("Elige rival entre los equipos registrados")

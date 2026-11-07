@@ -25,7 +25,7 @@ fun TeamScreen(teamId: String, initialTab: String, nav: NavHostController) {
     Scaffold(topBar = {
         Column {
             TopAppBar(title = { Text(session.teams.find { it.id == teamId }?.name ?: "Ficha del equipo") },
-                navigationIcon = { BackButton { nav.safeBack() } },
+                navigationIcon = { pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(nav) },
                 actions = { TextButton(onClick = { nav.navigate("teams") }) { Text("Cambiar") } })
             ScrollableTabRow(selectedTabIndex = StructurePolicy.teamTabs.indexOf(tab), edgePadding = 0.dp) {
                 listOf("Plantel", "Entrenamientos", "Partidos", "Muro").forEachIndexed { index, title ->

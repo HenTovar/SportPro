@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import pe.edu.esan.sportpro.ui.common.BackButton
 
 @Composable
 fun MainNavigationBar(nav: NavHostController, route: String) {
@@ -25,7 +27,7 @@ fun MainNavigationBar(nav: NavHostController, route: String) {
             val icon = when (label) {
                 "Inicio" -> Icons.Default.Home
                 "Partidos" -> Icons.Default.PlayArrow
-                "Equipo" -> Icons.Default.Person
+                "Equipo" -> Icons.Default.List
                 "Comunidad" -> Icons.Default.Favorite
                 else -> Icons.Default.Person
             }
@@ -41,7 +43,7 @@ fun MainNavigationBar(nav: NavHostController, route: String) {
                     popUpTo("home") { inclusive = false }
                     launchSingleTop = true
                 }
-            }, icon = { Icon(icon, contentDescription = label) }, label = { Text(label, maxLines = 1) })
+            }, icon = { Icon(icon, contentDescription = label) }, label = { Text(StructurePolicy.navigationLabel(label), maxLines = 1, softWrap = false) })
         }
     }
 }
@@ -64,4 +66,16 @@ fun TeamSelector(modifier: Modifier = Modifier, onManage: (() -> Unit)? = null) 
             }
         }
     }
+}
+
+/** Root destinations already have the persistent bar; details keep back navigation. */
+@Composable
+fun DestinationBackButton(route: String, onBack: () -> Unit) {
+    if (!StructurePolicy.isPrimaryDestination(route)) BackButton(onBack)
+}
+
+@Composable
+fun PrimaryDestinationBackButton(nav: NavHostController) {
+    val entry by nav.currentBackStackEntryAsState()
+    DestinationBackButton(entry?.destination?.route.orEmpty()) { nav.safeBack() }
 }

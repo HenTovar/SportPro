@@ -93,9 +93,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
             TopAppBar(
                 title = { Text(if (pickTrainings || pickMatches || pickCommunity) "Elegí un equipo" else "Equipos") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.safeBack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
-                    }
+                    pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(navController)
                 }
             )
         },

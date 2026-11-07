@@ -20,7 +20,7 @@ Se limita a200 eventos para una llamada y a40 filas para la plantilla; el resume
 
 La clave secreta de Gemini queda administrada por Firebase, nunca se pide ni añade al APK/repositorio/chat. La configuración pública de la app Firebase que ya existía (`google-services.json`, ignorado por git) es distinta de esa clave de Gemini; el SDK necesita esa configuración del cliente. No publicar sus valores.
 
-Debug abre y la plantilla funciona sin registrar App Check. Sólo al pedir IA se instala el proveedor de depuración; su token se genera en el teléfono, no se empaqueta. Release no incluye ese proveedor ni un token fijo, y falla cerrado antes de red hasta configurar y revisar la atestación de producción. Debug debe obtener un token de atestación válido antes de inicializar Firebase AI, incluso si el servidor no exige enforcement. Eso no desactiva la política del servidor: desde2nov2026 Firebase puede exigir atestación y rechazar la llamada IA. El dueño debe validar su configuración autorizada en consola/dispositivo; no se intenta evadirla ni cambiarla desde aquí. No confundir respaldo operativo con «Gemini real verificado».
+Debug abre y la plantilla funciona sin registrar App Check. Sólo al pedir IA se instala el proveedor de depuración; su token se genera en el teléfono, no se empaqueta. Release no incluye ese proveedor ni un token fijo y, en esta implementación, siempre falla cerrado antes del modelo y usa plantilla: no hay atestación de producción configurada. Code13 se entrega sólo como APK debug académico; el build release queda pendiente por el límite térmico de la máquina, no aprobado ni probado en teléfono. Debug debe obtener un token de atestación válido antes de inicializar Firebase AI, incluso si el servidor no exige enforcement. Eso no desactiva la política del servidor: desde2nov2026 Firebase puede exigir atestación y rechazar la llamada IA. El dueño debe validar su configuración autorizada en consola/dispositivo; no se intenta evadirla ni cambiarla desde aquí. No confundir respaldo operativo con «Gemini real verificado».
 
 Referencias oficiales verificadas7nov2026:
 - https://firebase.google.com/docs/ai-logic/get-started
@@ -29,3 +29,7 @@ Referencias oficiales verificadas7nov2026:
 - https://firebase.google.com/support/release-notes/android
 
 No se hacen llamadas reales al proveedor en las pruebas de construcción. El permiso de compilar también está sujeto a la coordinación térmica del equipo, no sólo a que pase la hora acordada.
+
+## Datos locales y copia de seguridad
+
+El manifiesto desactiva `allowBackup`; las reglas antiguas y Android 12+ excluyen todos los dominios de almacenamiento de la app, tanto en copia a la nube como en transferencia de dispositivo. No se prueba aquí el comportamiento de cada fabricante ni se borran copias antiguas que ya pudieran existir. La validación en teléfono sigue pendiente.

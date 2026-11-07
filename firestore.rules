@@ -473,6 +473,19 @@ service cloud.firestore {
           && request.resource.data.get('active',true)==false;
       }
       match /players/{playerId} {
+        // Temporary APK-code14 bridge: only confirm absence of this user's
+        // deterministic slot for the current active invitation. Never read an
+        // existing row through this exception; normal membership ACL still wins.
+        allow get: if activeUser() && profile().role == 'JUGADOR'
+          && profile().get('teamId', '') == '' && profile().get('playerId', '') == ''
+          && profile().get('lastFamilyRevocation', null) == null
+          && !exists(/databases/$(database)/documents/teams/$(teamId)/players/$(playerId))
+          && activeTeam(teamId)
+          && playerId == request.auth.uid + '_' + get(/databases/$(database)/documents/teamJoinStates/$(teamId)).data.code
+          && get(/databases/$(database)/documents/teamJoinStates/$(teamId)).data.revoked == false
+          && get(/databases/$(database)/documents/teamCodes/$(get(/databases/$(database)/documents/teamJoinStates/$(teamId)).data.code)).data.teamId == teamId
+          && get(/databases/$(database)/documents/teamCodes/$(get(/databases/$(database)/documents/teamJoinStates/$(teamId)).data.code)).data.expiresAt > request.time
+          && get(/databases/$(database)/documents/teamCodes/$(get(/databases/$(database)/documents/teamJoinStates/$(teamId)).data.code)).data.count < 40;
         allow read: if teamStaff(teamId) || assignedPlayer(teamId, playerId);
         allow create: if teamStaff(teamId) && request.resource.data.get('userUid',null) in [null,''] && request.resource.data.get('parentUid', null) in [null, '']
           && request.resource.data.get('familyRevokedAt', null) == null

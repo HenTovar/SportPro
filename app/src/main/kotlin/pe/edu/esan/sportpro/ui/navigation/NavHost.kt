@@ -29,10 +29,20 @@ import pe.edu.esan.sportpro.ui.screens.attendance.PlayerAttendanceHistoryScreen
  * Define todas las rutas de navegación de la aplicación.
  */
 @Composable
-fun SportProNavHost(
-    startDestination: String = "login",
-    navController: NavHostController = rememberNavController()
-) {
+fun SportProNavHost(startDestination: String = "login") {
+    pe.edu.esan.sportpro.features.AccountBoundary { _, resetToLogin ->
+        val controller = rememberNavController()
+        DisposableEffect(controller) {
+            onDispose {
+                if (controller.currentDestination != null) controller.popBackStack(controller.graph.id, true)
+            }
+        }
+        SessionNavHost(if (resetToLogin) "login" else startDestination, controller)
+    }
+}
+
+@Composable
+private fun SessionNavHost(startDestination: String, navController: NavHostController) {
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route.orEmpty()
     val protected = route.isNotBlank() && route != "login" && route != "register"

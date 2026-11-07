@@ -53,3 +53,36 @@ El indicador de pendientes corresponde a los snapshots observados del equipo; no
 5. Cargar datos online, desconectar: caché e indicador; registrar un evento permitido por el flujo existente, comprobar pendiente, reconectar y confirmar una sola sincronización. Sin datos previos, mostrar vacío/carga honesta; no inventar acceso.
 
 No ejecutar estas pruebas con datos privados de terceros. El candidato no se acepta a sí mismo; requiere revisión independiente y aceptación del cliente.
+
+
+## Cuenta: cierre y cambio de usuario (candidato pendiente de validar)
+
+En Perfil, la sección Cuenta contiene Cerrar sesión y Cambiar de cuenta. Ambos
+requieren confirmación y abren un Login nuevo, con correo y contraseña vacíos.
+La opción de Inicio lleva a Perfil para usar la misma confirmación.
+Se retiró el UID sin formato de Inicio; no se presenta como código de vínculo.
+
+La barrera superior retira el árbol de navegación (incluidos sus ViewModels y
+listeners) antes de cerrar Firebase Auth. Elimina las selecciones de equipo/hijo,
+las preferencias de notificación por cuenta y los avisos locales. Después termina
+Firestore, borra su persistencia y crea una instancia nueva. No elimina datos del
+servidor. La confirmación advierte que se descartan cambios locales no sincronizados.
+La limpieza no equivale a un borrado forense seguro del almacenamiento.
+
+Un marcador de limpieza sobrevive al cierre del proceso. Si una fase falla, Login
+permanece bloqueado y se muestra Reintentar limpieza. Un cambio externo de identidad
+también dispara la barrera. El repositorio de autenticación y TeamSession no se
+modifican: la integración debe conservar AccountBoundary por encima de ambos.
+
+Aceptación Android requerida (no medida con la compilación):
+1. Cuenta A: seleccionar equipo/hijo, cargar datos y producir un aviso local.
+2. Perfil > Cerrar sesión > Cancelar conserva la sesión. Confirmar limpia selecciones,
+   avisos y caché. Atrás no vuelve a ninguna pantalla autenticada.
+3. Perfil > Cambiar de cuenta > Confirmar abre Login vacío. Entrar con B, sin equipo
+   de A; desconectar la red y comprobar que no se muestran registros de A.
+4. Interrumpir la app durante la limpieza; al abrir, termina de limpiar antes de Login.
+5. Inyectar fallo de limpieza en el arnés: Login no se admite hasta reintento exitoso.
+
+AccountExitTest comprueba el protocolo con dobles y fallos por fase. No acredita
+por sí solo la API Android de caché, las notificaciones ni el gesto Atrás.
+Referencia: https://firebase.google.com/docs/reference/android/com/google/firebase/firestore/FirebaseFirestore

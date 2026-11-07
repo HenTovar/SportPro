@@ -27,6 +27,7 @@ import pe.edu.esan.sportpro.data.model.RolePolicy
 
 object FirestoreOffline {
     private var configured=false
+    @Synchronized fun restartAfterClear() { configured=false; configure() }
     @Synchronized fun configure() {
         if(configured)return
         FirebaseFirestore.getInstance().firestoreSettings=FirebaseFirestoreSettings.Builder()
@@ -42,7 +43,8 @@ class LocalNotifier(private val context: Context) {
         if(Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return
         if(!manager.areNotificationsEnabled())return
         if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(NotificationChannel("team_local","Actividad del equipo",NotificationManager.IMPORTANCE_DEFAULT))
-        val intent=PendingIntent.getActivity(context,0,Intent(context,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val intent=PendingIntent.getActivity(context,0,Intent(context,MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification=NotificationCompat.Builder(context,"team_local").setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(event.title).setContentText(event.body).setContentIntent(intent).setAutoCancel(true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).build()

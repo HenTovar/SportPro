@@ -91,6 +91,9 @@ private fun AppDestinations(startDestination: String, navController: NavHostCont
         composable("profile") {
             pe.edu.esan.sportpro.ui.screens.home.AdminProfileScreen(navController)
         }
+        composable("myData") {
+            pe.edu.esan.sportpro.ui.guided.MyDataScreen(navController)
+        }
         composable("adminRequests") {
             pe.edu.esan.sportpro.ui.screens.home.AdminRequestsScreen(navController)
         }
@@ -111,8 +114,8 @@ private fun AppDestinations(startDestination: String, navController: NavHostCont
             CreateTeamScreen(navController = navController, teamId = entry.arguments?.getString("teamId") ?: "")
         }
         composable("editPlayer/{teamId}/{playerId}") { entry ->
-            CreatePlayerScreen(teamId = entry.arguments?.getString("teamId") ?: "", navController = navController,
-                playerId = entry.arguments?.getString("playerId") ?: "")
+            pe.edu.esan.sportpro.ui.guided.GuidedPlayerEditor(
+                entry.arguments?.getString("teamId").orEmpty(), entry.arguments?.getString("playerId").orEmpty(), navController)
         }
         composable("editTraining/{teamId}/{trainingId}") { entry ->
             CreateTrainingScreen(teamId = entry.arguments?.getString("teamId") ?: "", navController = navController,
@@ -138,7 +141,7 @@ private fun AppDestinations(startDestination: String, navController: NavHostCont
         }
         composable("createPlayer/{teamId}") { backStackEntry ->
             val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
-            CreatePlayerScreen(teamId = teamId, navController = navController)
+            pe.edu.esan.sportpro.ui.guided.TeamCodeScreen(teamId, navController)
         }
 
         // Entrenamientos

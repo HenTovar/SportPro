@@ -59,8 +59,8 @@ import pe.edu.esan.sportpro.ui.common.rememberEsStaff
 
 /**
  * Jugadores de un equipo. El staff (ADMIN/ENTRENADOR) ve la ficha completa y puede
- * registrar jugadores. JUGADOR y PADRE ven una vista reducida: sin datos físicos ni
- * contactos de otros jugadores (privacidad de menores).
+ * emitir códigos de equipo. JUGADOR y PADRE sólo cargan fichas propias o vinculadas;
+ * la autorización de Firestore sigue siendo la barrera de privacidad.
  */
 @Composable
 fun PlayersScreen(teamId: String, navController: NavHostController, embedded: Boolean = false) {
@@ -105,7 +105,7 @@ fun PlayersScreen(teamId: String, navController: NavHostController, embedded: Bo
         floatingActionButton = {
             if (esStaff) {
                 FloatingActionButton(onClick = { navController.navigate("createPlayer/$teamId") }) {
-                    Icon(Icons.Filled.Add, contentDescription = "Registrar jugador")
+                    Icon(Icons.Filled.Add, contentDescription = "Código de equipo")
                 }
             }
         }
@@ -165,7 +165,7 @@ private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistori
                 Text("#${jugador.number}  ${jugador.name}", style = MaterialTheme.typography.titleMedium)
                 Text(jugador.position.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() })
                 if (verDatosPrivados) {
-                    // Sólo el staff ve datos físicos y contactos.
+                    // Sólo se renderizan fichas cuya lectura autoriza el repositorio y las reglas.
                     Text("Talla ${jugador.height} cm · Peso ${jugador.weight} kg", style = MaterialTheme.typography.bodySmall)
                     Text("Tel: ${jugador.phone}", style = MaterialTheme.typography.bodySmall)
                     Text(

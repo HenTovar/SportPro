@@ -31,42 +31,39 @@ fun AdminProfileScreen(navController: NavHostController) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var role by remember { mutableStateOf<UserRole?>(null) }
-    var target by remember { mutableStateOf(UserRole.ADMIN) }
+    var target by remember { mutableStateOf(ProfileRoleUi.initialTarget) }
+    var roleLoading by remember { mutableStateOf(true) }
+    var roleLoadError by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         try {
             val uid = checkNotNull(auth.currentUser).uid
             role = UserRole.valueOf(db.collection("users").document(uid).get().await().getString("role").orEmpty())
-        } catch (e: Exception) { message = "No se pudo cargar tu rol." }
+        } catch (e: Exception) { roleLoadError = true; message = "No se pudo cargar tu rol." }
+        finally { roleLoading = false }
     }
     var requested by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Perfil", style = MaterialTheme.typography.headlineMedium)
         pe.edu.esan.sportpro.features.AccountControls()
+        Button(onClick = { navController.navigate("myData") }) { Text("Mis datos") }
         HorizontalDivider()
         pe.edu.esan.sportpro.features.FeaturePreferences(auth.currentUser?.uid.orEmpty())
         Text(auth.currentUser?.email.orEmpty())
-        Text("Rol: ${if (creator) "Creador" else RolePolicy.label(role)}")
+        ProfileRoleSummary(role, roleLoading, roleLoadError, creator)
         if (role == UserRole.ADMIN) pe.edu.esan.sportpro.ui.navigation.CoachAssignments()
         if (creator || role == UserRole.ADMIN) {
             Button(onClick = { navController.navigate("adminRequests") }) { Text("Solicitudes de rol") }
         }
-        run {
-            UserRole.values().filter { it != role }.forEach { candidate ->
-                Row {
-                    RadioButton(selected = target == candidate, onClick = { target = candidate })
-                    Text(RolePolicy.label(candidate))
-                }
-            }
-            Text("Solicitar no cambia tu rol. Una persona autorizada debe aprobar la solicitud.")
-            Button(enabled = !busy && !requested && role != null && target != role, onClick = {
+        RoleRequestControls(role, target, roleLoading, roleLoadError, busy, requested,
+            onTarget = { target = it }, onRequest = {
                 busy = true
                 scope.launch {
                     try {
                         val user = checkNotNull(auth.currentUser) { "Inicia sesión" }
                         db.collection("roleRequests").document(user.uid).set(mapOf(
                             "uid" to user.uid, "email" to checkNotNull(user.email),
-                            "fromRole" to checkNotNull(role).name, "toRole" to target.name,
+                            "fromRole" to checkNotNull(role).name, "toRole" to checkNotNull(target).name,
                             "createdAt" to FieldValue.serverTimestamp(), "status" to "PENDING"
                         )).await()
                         requested = true
@@ -75,8 +72,7 @@ fun AdminProfileScreen(navController: NavHostController) {
                         message = "No se pudo enviar. Puede existir una solicitud previa; no se reemplaza."
                     } finally { busy = false }
                 }
-            }) { Text("Solicitar cambio de rol") }
-        }
+            })
         if (auth.currentUser?.email == "harontovar@gmail.com" && !creator) {
             Text("Verifica tu correo en Firebase Auth para habilitar Creador.")
             OutlinedButton(enabled = !busy, onClick = { scope.launch {

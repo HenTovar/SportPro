@@ -13,7 +13,7 @@ object FamilyPolicy {
     fun newCode(random: SecureRandom = SecureRandom()) = (1..12).map { alphabet[random.nextInt(alphabet.length)] }.joinToString("")
     fun children(user: User?): List<FamilyChild> {
         if (user == null || !user.isActive || user.role !in listOf(UserRole.PADRE, UserRole.JUGADOR)) return emptyList()
-        val legacy = if (user.teamId.isNotBlank() && user.playerId.isNotBlank())
+        val legacy = if (!user.hasFamilyRevocation && user.teamId.isNotBlank() && user.playerId.isNotBlank())
             listOf(FamilyChild(user.teamId, user.playerId, "Ficha vinculada")) else emptyList()
         return (legacy + if (user.role == UserRole.PADRE) user.children else emptyList())
             .filter { it.teamId.isNotBlank() && it.playerId.isNotBlank() }.distinctBy { it.key }

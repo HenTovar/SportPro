@@ -21,6 +21,8 @@ class FamilyPolicyTest {
     @Test fun actualFirestoreMapperKeepsFamilyMapOutOfRegistration() {
         val plain=com.google.firebase.firestore.util.CustomClassMapper.convertToPlainJavaTypes(parent) as Map<*,*>
         assertFalse(plain.containsKey("children"))
+        assertFalse(plain.containsKey("coachTeamIds"))
+        assertFalse(plain.containsKey("hasFamilyRevocation"))
         assertTrue(plain.containsKey("active"))
     }
     @Test fun actualFirestoreMapperAcceptsProfileWithNestedChildrenAndUnknownFields() {

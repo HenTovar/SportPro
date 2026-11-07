@@ -2,6 +2,7 @@ package pe.edu.esan.sportpro.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -11,7 +12,12 @@ import pe.edu.esan.sportpro.data.model.Team
  * Repositorio para gestión de equipos.
  */
 class TeamRepository(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val currentProfile: suspend () -> pe.edu.esan.sportpro.data.model.User? = {
+        val result = AuthRepository(com.google.firebase.auth.FirebaseAuth.getInstance(), firestore).getCurrentUser()
+            .first { it !is Result.Loading }
+        (result as? Result.Success)?.data
+    }
 ) {
     /**
      * Obtiene todos los equipos activos.
@@ -22,8 +28,17 @@ class TeamRepository(
             // Sin where+orderBy combinados: eso exige un índice compuesto en Firestore.
             // Firestore guarda el Boolean `isActive` de Kotlin como el campo "active".
             // El id sale del documento (equipos antiguos podían tener id="" guardado).
-            val snapshot = firestore.collection("teams").get().await()
-            val teams = snapshot.documents
+            val user = checkNotNull(currentProfile()) { "Inicia sesión" }
+            check(user.isActive) { "Cuenta inactiva" }
+            val docs = if (user.role == pe.edu.esan.sportpro.data.model.UserRole.ADMIN) {
+                firestore.collection("teams").get().await().documents
+            } else {
+                val ids = if (user.role == pe.edu.esan.sportpro.data.model.UserRole.ENTRENADOR) user.coachTeamIds
+                    else (pe.edu.esan.sportpro.data.model.FamilyPolicy.children(user).map { it.teamId } +
+                        if (user.hasFamilyRevocation) "" else user.teamId)
+                ids.filter { it.isNotBlank() }.distinct().map { firestore.collection("teams").document(it).get().await() }
+            }
+            val teams = docs
                 .filter { it.getBoolean("active") != false }
                 .mapNotNull { doc -> doc.toObject(Team::class.java)?.copy(id = doc.id) }
                 .sortedBy { it.name.lowercase() }

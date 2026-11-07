@@ -64,11 +64,12 @@ fun FamilyCodeIssuer(teamId: String, playerId: String?) {
         scope.launch {
             try { code = repo.issue(teamId, playerId!!) }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "No se pudo emitir el código. Comprueba la conexión y que las nuevas reglas familiares estén publicadas." }
+            catch (e: Exception) { error = e.message ?: "No se pudo emitir: revisa asignación de equipo, límite de 20 por hora y reglas publicadas." }
             finally { busy = false }
         }
     }) { Text(if (busy) "Generando…" else "Generar código para padre") }
     if (code.isNotBlank()) SelectionContainer { Text("Código: ${code.chunked(4).joinToString("-")} · vence en 20 min · un solo uso") }
     if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+    FamilyCodeMaintenanceControls(teamId)
     FamilyRevocationControls(teamId, playerId)
 }

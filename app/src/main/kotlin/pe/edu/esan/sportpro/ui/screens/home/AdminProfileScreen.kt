@@ -44,7 +44,8 @@ fun AdminProfileScreen(navController: NavHostController) {
         Text("Perfil", style = MaterialTheme.typography.headlineMedium)
         Text(auth.currentUser?.email.orEmpty())
         Text("Rol: ${if (creator) "Creador" else RolePolicy.label(role)}")
-        if (creator || RolePolicy.isStaff(role)) {
+        if (role == UserRole.ADMIN) pe.edu.esan.sportpro.ui.navigation.CoachAssignments()
+        if (creator || role == UserRole.ADMIN) {
             Button(onClick = { navController.navigate("adminRequests") }) { Text("Solicitudes de rol") }
         }
         run {
@@ -116,6 +117,7 @@ fun AdminRequestsScreen(navController: NavHostController) {
             val user = checkNotNull(auth.currentUser)
             val raw = db.collection("users").document(user.uid).get().await().getString("role")
             actorRole = UserRole.values().firstOrNull { it.name == raw }
+            check(actorRole == UserRole.ADMIN || isCreator(user)) { "La cola global de roles requiere administrador" }
             val targets = UserRole.values().filter { RolePolicy.canApprove(actorRole, isCreator(user), it) }
             check(targets.isNotEmpty())
             rows = db.collection("roleRequests").whereIn("toRole", targets.map { it.name }).get().await().documents.map {

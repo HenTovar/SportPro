@@ -15,7 +15,9 @@ data class User(
     val isActive: Boolean = true,
     val teamId: String = "",
     val playerId: String = "",
-    @get:com.google.firebase.firestore.Exclude val children: List<FamilyChild> = emptyList()
+    @get:com.google.firebase.firestore.Exclude val children: List<FamilyChild> = emptyList(),
+    @get:com.google.firebase.firestore.Exclude val coachTeamIds: List<String> = emptyList(),
+    @get:com.google.firebase.firestore.Exclude val hasFamilyRevocation: Boolean = false
 )
 
 /**

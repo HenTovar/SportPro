@@ -98,7 +98,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
             )
         },
         floatingActionButton = {
-            if (esStaff && !(pickTrainings || pickMatches || pickCommunity)) {
+            if (session.account?.role == pe.edu.esan.sportpro.data.model.UserRole.ADMIN && !(pickTrainings || pickMatches || pickCommunity)) {
                 FloatingActionButton(onClick = { navController.navigate("createTeam") }) {
                     Icon(Icons.Filled.Add, contentDescription = "Crear equipo")
                 }
@@ -135,7 +135,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
-                                if (esStaff && !(pickTrainings || pickMatches || pickCommunity)) {
+                                if (session.account?.role == pe.edu.esan.sportpro.data.model.UserRole.ADMIN && !(pickTrainings || pickMatches || pickCommunity)) {
                                     TextButton(onClick = { navController.navigate("editTeam/${Uri.encode(equipo.id)}") }) { Text("Editar") }
                                     IconButton(onClick = { aEliminar = equipo }) {
                                         Icon(Icons.Filled.Delete, contentDescription = "Eliminar equipo")

@@ -18,6 +18,28 @@ class AuthRepository(
     private val firebaseAuth: FirebaseAuth,
     private val firestore: FirebaseFirestore
 ) {
+    private suspend fun hydrate(doc: com.google.firebase.firestore.DocumentSnapshot): User? {
+        val base = doc.toObject(User::class.java)?.copy(uid = doc.id) ?: return null
+        val coachIds = if (base.role != UserRole.ENTRENADOR) emptyList() else if (doc.contains("coachTeamIds")) {
+            (doc.get("coachTeamIds") as? List<*>)?.filterIsInstance<String>()?.filter { it.isNotBlank() }?.distinct().orEmpty()
+        } else {
+            // Read only the legacy owner's filtered query, never all teams.
+            val owned = firestore.collection("teams").whereEqualTo("ownerId", doc.id).get().await().documents.map { it.id }
+            (owned + base.teamId).filter { it.isNotBlank() }.distinct()
+        }
+        val children = pe.edu.esan.sportpro.data.model.FamilyPolicy.decode(doc.get("children")).map { child ->
+            if (child.name != "Ficha vinculada" || base.role != UserRole.PADRE) child else {
+                try {
+                    val player = firestore.collection("teams").document(child.teamId).collection("players").document(child.playerId).get().await()
+                    child.copy(name = player.getString("name") ?: "Ficha vinculada")
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { child.copy(name = "Ficha no disponible") }
+            }
+        }
+        return base.copy(children = children, coachTeamIds = coachIds,
+            hasFamilyRevocation = doc.get("lastFamilyRevocation") != null)
+    }
+
     /**
      * Registra un nuevo usuario con email, contraseña y rol.
      */
@@ -74,7 +96,7 @@ class AuthRepository(
 
             // Obtener datos del usuario desde Firestore
             val userDoc = firestore.collection("users").document(uid).get().await()
-            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id, children = pe.edu.esan.sportpro.data.model.FamilyPolicy.decode(userDoc.get("children"))) ?: throw Exception("Usuario no encontrado")
+            val user = hydrate(userDoc) ?: throw Exception("Usuario no encontrado")
 
             emit(Result.Success(user))
         } catch (e: Exception) {
@@ -91,7 +113,7 @@ class AuthRepository(
         val currentUser = firebaseAuth.currentUser
         if (currentUser != null) {
             val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
-            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id, children = pe.edu.esan.sportpro.data.model.FamilyPolicy.decode(userDoc.get("children")))
+            val user = hydrate(userDoc)
             emit(Result.Success(user))
         } else {
             emit(Result.Success(null))

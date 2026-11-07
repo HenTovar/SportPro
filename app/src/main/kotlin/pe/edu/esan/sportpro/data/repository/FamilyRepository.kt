@@ -11,19 +11,42 @@ import java.util.Date
 /** The rules, not client clocks or UI checks, authorize issuance and atomic redemption. */
 class FamilyRepository(private val db: FirebaseFirestore, private val auth: FirebaseAuth) {
     suspend fun issue(teamId: String, playerId: String): String {
-        checkNotNull(auth.currentUser) { "Inicia sesión" }
-        val player = db.collection("teams").document(teamId).collection("players").document(playerId).get().await()
-        check(player.exists()) { "El jugador no existe" }
+        val uid = checkNotNull(auth.currentUser?.uid) { "Inicia sesión" }
         val code = FamilyPolicy.newCode()
         val ref = db.collection("familyCodes").document(code)
+        val quota = db.collection("familyCodeQuotas").document(uid)
         db.runTransaction { tx ->
             check(!tx.get(ref).exists()) { "Vuelve a generar el código" }
-            tx.set(ref, mapOf("teamId" to teamId, "playerId" to playerId,
-                "name" to player.getString("name").orEmpty(), "issuedBy" to auth.currentUser!!.uid,
+            val before = tx.get(quota)
+            val window = before.getTimestamp("windowStart")
+            val restart = window == null || window.toDate().time + 3_600_000L <= System.currentTimeMillis()
+            val count = if (restart) 1L else (before.getLong("count") ?: 20L) + 1L
+            check(count <= 20L) { "Límite de 20 códigos por hora. Espera al siguiente período." }
+            tx.set(ref, mapOf("teamId" to teamId, "playerId" to playerId, "issuedBy" to uid,
                 "createdAt" to FieldValue.serverTimestamp(), "expiresAt" to Timestamp(Date(System.currentTimeMillis() + 20 * 60_000)),
                 "usedBy" to "", "usedAt" to null))
+            tx.set(quota, mapOf("windowStart" to if (restart) FieldValue.serverTimestamp() else window,
+                "count" to count, "lastCode" to code))
         }.await()
         return code
+    }
+    data class CleanupPlan(val teamId: String, val staleIds: List<String>, val legacyNameIds: List<String>)
+    suspend fun previewCleanup(teamId: String): CleanupPlan {
+        val uid = checkNotNull(auth.currentUser?.uid) { "Inicia sesión" }
+        val admin = db.collection("users").document(uid).get().await().getString("role") == "ADMIN"
+        var query: com.google.firebase.firestore.Query = db.collection("familyCodes").whereEqualTo("teamId", teamId)
+        if (!admin) query = query.whereEqualTo("issuedBy", uid)
+        val docs = query.limit(100).get().await().documents
+        val now = System.currentTimeMillis()
+        val stale = docs.filter { it.getString("usedBy").orEmpty().isNotBlank() || (it.getTimestamp("expiresAt")?.toDate()?.time ?: Long.MAX_VALUE) <= now }
+        return CleanupPlan(teamId, stale.map { it.id }, if (admin) docs.filter { it !in stale && it.contains("name") }.map { it.id } else emptyList())
+    }
+    suspend fun cleanup(plan: CleanupPlan) {
+        require(plan.staleIds.size + plan.legacyNameIds.size <= 100)
+        val batch = db.batch()
+        plan.staleIds.forEach { batch.delete(db.collection("familyCodes").document(it)) }
+        plan.legacyNameIds.forEach { batch.update(db.collection("familyCodes").document(it), "name", FieldValue.delete()) }
+        batch.commit().await()
     }
     suspend fun revoke(parentUid: String, teamId: String, playerId: String) {
         val actor = checkNotNull(auth.currentUser?.uid) { "Inicia sesión" }
@@ -70,11 +93,14 @@ class FamilyRepository(private val db: FirebaseFirestore, private val auth: Fire
             val player = checkNotNull(invitation.getString("playerId"))
             val children = (account.get("children") as? Map<*, *>)?.entries?.associate { it.key.toString() to it.value }?.toMutableMap() ?: mutableMapOf()
             val teamChildren = (children[team] as? Map<*, *>)?.entries?.associate { it.key.toString() to it.value }?.toMutableMap() ?: mutableMapOf()
-            teamChildren[player] = mapOf("name" to invitation.getString("name").orEmpty(), "code" to code)
+            teamChildren[player] = mapOf("code" to code)
             children[team] = teamChildren
             tx.update(userRef, mapOf("children" to children, "lastFamilyCode" to code))
-            tx.update(codeRef, mapOf("usedBy" to uid, "usedAt" to FieldValue.serverTimestamp()))
+            tx.update(codeRef, mapOf("usedBy" to uid, "usedAt" to FieldValue.serverTimestamp(), "name" to FieldValue.delete()))
             tx.update(db.collection("teams").document(team).collection("players").document(player), "parentUid", uid)
         }.await()
+        try { codeRef.delete().await() }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { /* Grant committed; staff cleanup can remove the name-free receipt later. */ }
     }
 }

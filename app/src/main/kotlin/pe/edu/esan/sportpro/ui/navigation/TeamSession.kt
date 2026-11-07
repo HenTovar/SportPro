@@ -60,7 +60,7 @@ fun rememberTeamSession(refreshKey: String = ""): TeamSession {
                     else -> Unit
                 }
             } else {
-                val ids = (FamilyPolicy.children(user).map { it.teamId } + user.teamId).filter { it.isNotBlank() }.distinct()
+                val ids = (FamilyPolicy.children(user).map { it.teamId } + if (user.hasFamilyRevocation) "" else user.teamId).filter { it.isNotBlank() }.distinct()
                 val loaded = mutableListOf<Team>()
                 ids.forEach { id -> when (val result = container.teamRepository.getTeamById(id).first { it !is Result.Loading }) {
                     is Result.Success -> loaded += result.data

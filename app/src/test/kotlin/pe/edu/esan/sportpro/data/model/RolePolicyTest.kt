@@ -28,7 +28,7 @@ class RolePolicyTest {
     @Test fun staffCanManageTeamsWhileRestrictedRolesCannot() {
         for (role in listOf(UserRole.ADMIN, UserRole.ENTRENADOR)) {
             assertTrue(RolePolicy.isStaff(role))
-            assertTrue(RolePolicy.canReadPlayer(User(role = role), "team", "player"))
+            assertTrue(RolePolicy.canReadPlayer(User(role = role, coachTeamIds = listOf("team")), "team", "player"))
         }
         assertFalse(RolePolicy.isStaff(null))
     }
@@ -46,8 +46,23 @@ class RolePolicyTest {
             assertFalse(RolePolicy.canApprove(role,true,UserRole.ENTRENADOR))
         assertTrue(RolePolicy.canApprove(UserRole.ADMIN,true,UserRole.ENTRENADOR))
     }
-    @Test fun leavingParentClearsOnlyFamilyMapInSameApproval() {
-        assertEquals(mapOf("role" to "JUGADOR", "children" to emptyMap<String,Any>()),RolePolicy.approvalFields(UserRole.JUGADOR))
-        assertEquals(mapOf("role" to "PADRE", "children" to emptyMap<String,Any>()),RolePolicy.approvalFields(UserRole.PADRE))
+    @Test fun approvalClearsFamilyLegacyAndCoachScopeAtomically() {
+        assertEquals(mapOf("role" to "JUGADOR", "children" to emptyMap<String,Any>(), "teamId" to "", "playerId" to "", "coachTeamIds" to emptyList<String>()),RolePolicy.approvalFields(UserRole.JUGADOR))
+        assertEquals(mapOf("role" to "PADRE", "children" to emptyMap<String,Any>(), "teamId" to "", "playerId" to "", "coachTeamIds" to emptyList<String>()),RolePolicy.approvalFields(UserRole.PADRE))
+    }
+
+    @Test fun coachNeedsAnExplicitDerivedTeamAndCannotReadForeignPlayers() {
+        val coach = User(role=UserRole.ENTRENADOR, coachTeamIds=listOf("own"))
+        assertTrue(RolePolicy.canReadTeam(coach,"own"))
+        assertFalse(RolePolicy.canReadTeam(coach,"other"))
+        assertFalse(RolePolicy.canReadPlayer(coach,"other","child"))
+        assertFalse(RolePolicy.canReadTeam(coach.copy(coachTeamIds=emptyList(),teamId="own"),"own"))
+        assertFalse(RolePolicy.canReadTeam(coach.copy(isActive=false),"own"))
+    }
+    @Test fun revocationMarkerDisablesLegacyButNotFreshFamilyGrant() {
+        val parent=User(role=UserRole.PADRE,teamId="a",playerId="old",hasFamilyRevocation=true)
+        assertFalse(RolePolicy.canReadPlayer(parent,"a","old"))
+        assertFalse(RolePolicy.canReadTeam(parent,"a"))
+        assertTrue(RolePolicy.canReadPlayer(parent.copy(children=listOf(FamilyChild("b","new","Nuevo"))),"b","new"))
     }
 }

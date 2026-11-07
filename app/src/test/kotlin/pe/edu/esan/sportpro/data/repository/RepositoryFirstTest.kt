@@ -28,7 +28,7 @@ class RepositoryFirstTest {
 
     @Test fun teamsFirstSuccessDoesNotCrash() = runTest {
         setup()
-        assertTrue(TeamRepository(db).getAllTeams().first { it !is Result.Loading } is Result.Success)
+        assertTrue(TeamRepository(db, { pe.edu.esan.sportpro.data.model.User(role=pe.edu.esan.sportpro.data.model.UserRole.ADMIN) }).getAllTeams().first { it !is Result.Loading } is Result.Success)
     }
     @Test fun playersFirstSuccessDoesNotCrash() = runTest {
         setup()

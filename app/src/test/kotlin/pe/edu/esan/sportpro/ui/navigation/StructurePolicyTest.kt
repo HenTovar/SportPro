@@ -12,7 +12,7 @@ class StructurePolicyTest {
     @Test fun unassignedOnlyGetsHomeAndProfile() { assertEquals(listOf("Inicio","Perfil"),StructurePolicy.destinations(user(UserRole.JUGADOR))) }
     @Test fun signedOutDoesNotGetTeamActions() { assertEquals(2,StructurePolicy.destinations(null).size);assertNull(StructurePolicy.selectedTeam(null,"a",teams)) }
     @Test fun inactiveDoesNotExposeSelection() { val p=user(UserRole.ADMIN).copy(isActive=false);assertEquals(2,StructurePolicy.destinations(p).size);assertNull(StructurePolicy.selectedTeam(p,"a",teams)) }
-    @Test fun staffLastTeamIsRestored() { assertEquals("b",StructurePolicy.selectedTeam(user(UserRole.ENTRENADOR),"b",teams)?.id) }
+    @Test fun staffLastTeamIsRestored() { assertEquals("b",StructurePolicy.selectedTeam(user(UserRole.ENTRENADOR).copy(coachTeamIds=listOf("a","b")),"b",teams)?.id) }
     @Test fun deletedSelectionFallsBackToVisibleTeam() { assertEquals("a",StructurePolicy.selectedTeam(user(UserRole.ADMIN),"missing",teams)?.id) }
     @Test fun inactiveTeamIsNotRestored() { assertEquals("a",StructurePolicy.selectedTeam(user(UserRole.ADMIN),"old",teams)?.id) }
     @Test fun emptyTeamsHasNoSelection() { assertNull(StructurePolicy.selectedTeam(user(UserRole.ADMIN),"a",emptyList())) }

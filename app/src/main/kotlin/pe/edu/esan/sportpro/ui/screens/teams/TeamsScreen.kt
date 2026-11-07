@@ -74,13 +74,17 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
         if (profile is Result.Error) estado = EstadoLista.Error(profile.message)
         else if (user == null) estado = EstadoLista.Error("Inicia sesión para ver equipos")
         else if (RolePolicy.isStaff(user.role)) container.teamRepository.getAllTeams().collect { estado = it.aEstadoLista() }
-        else if (user.teamId.isBlank()) estado = EstadoLista.Datos(emptyList())
-        else container.teamRepository.getTeamById(user.teamId).collect { value ->
-            estado = when (value) {
-                is Result.Success -> EstadoLista.Datos(listOf(value.data))
-                is Result.Error -> EstadoLista.Error(value.message)
-                is Result.Loading -> EstadoLista.Cargando
+        else {
+            val ids = (pe.edu.esan.sportpro.data.model.FamilyPolicy.children(user).map { it.teamId } + user.teamId).filter { it.isNotBlank() }.distinct()
+            val rows = mutableListOf<Team>()
+            for (id in ids) {
+                when (val result = container.teamRepository.getTeamById(id).first { it !is Result.Loading }) {
+                    is Result.Success -> rows += result.data
+                    is Result.Error -> { estado = EstadoLista.Error(result.message); return@LaunchedEffect }
+                    else -> Unit
+                }
             }
+            estado = EstadoLista.Datos(rows)
         }
     }
 

@@ -38,15 +38,65 @@ service cloud.firestore {
       return activeUser() && profile().role in ['JUGADOR', 'PADRE'];
     }
     function assignedTeam(teamId) {
-      return restricted() && teamId != '' && profile().get('teamId', '') == teamId;
+      return restricted() && teamId != '' && (profile().get('teamId', '') == teamId
+        || (profile().role == 'PADRE' && teamId in profile().get('children', {})));
     }
     function assignedPlayer(teamId, playerId) {
-      return assignedTeam(teamId) && playerId != '' && profile().get('playerId', '') == playerId;
+      return restricted() && teamId != '' && playerId != '' &&
+        ((profile().get('teamId', '') == teamId && profile().get('playerId', '') == playerId)
+          || (profile().role == 'PADRE' && playerId in profile().get('children', {}).get(teamId, {})));
     }
     function matchReader(matchId) {
       let matchData = get(/databases/$(database)/documents/matches/$(matchId)).data;
       return staff() || assignedTeam(matchData.get('teamA', ''))
         || assignedTeam(matchData.get('teamB', ''));
+    }
+
+    // Known-code redemption: the code, family map and player ownership commit together.
+    function validFamilyClaim(code, uid) {
+      let invitation = get(/databases/$(database)/documents/familyCodes/$(code)).data;
+      let consumed = getAfter(/databases/$(database)/documents/familyCodes/$(code)).data;
+      let account = getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let child = get(/databases/$(database)/documents/teams/$(invitation.teamId)/players/$(invitation.playerId)).data;
+      let linked = getAfter(/databases/$(database)/documents/teams/$(invitation.teamId)/players/$(invitation.playerId)).data;
+      return activeUser() && profile().role == 'PADRE' && request.auth.uid == uid
+        && code.matches('[A-HJ-NP-Z2-9]{12}') && invitation.usedBy == ''
+        && invitation.expiresAt > request.time && child.get('active', child.get('isActive', true)) == true
+        && (child.get('parentUid', null) == null || child.parentUid == '' || child.parentUid == uid)
+        && consumed.usedBy == uid && consumed.usedAt == request.time
+        && account.lastFamilyCode == code
+        && account.children[invitation.teamId][invitation.playerId] == {'name': invitation.name, 'code': code}
+        && linked.parentUid == uid;
+    }
+    function validFamilyMap(uid) {
+      let code = request.resource.data.lastFamilyCode;
+      let invitation = get(/databases/$(database)/documents/familyCodes/$(code)).data;
+      let old = resource.data.get('children', {});
+      let next = request.resource.data.children;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['children', 'lastFamilyCode'])
+        && next is map && next.size() <= 20
+        && next.diff(old).affectedKeys().hasOnly([invitation.teamId])
+        && next[invitation.teamId] is map && next[invitation.teamId].size() <= 20
+        && next[invitation.teamId].diff(old.get(invitation.teamId, {})).affectedKeys().hasOnly([invitation.playerId])
+        && validFamilyClaim(code, uid);
+    }
+    match /familyCodes/{code} {
+      allow get: if staff() || (activeUser() && profile().role == 'PADRE'
+        && resource.data.usedBy == '' && resource.data.expiresAt > request.time);
+      allow list: if false;
+      allow create: if staff() && code.matches('[A-HJ-NP-Z2-9]{12}')
+        && request.resource.data.keys().hasOnly(['teamId','playerId','name','issuedBy','createdAt','expiresAt','usedBy','usedAt'])
+        && request.resource.data.teamId is string && request.resource.data.playerId is string
+        && request.resource.data.name is string && request.resource.data.name.size() <= 200
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/players/$(request.resource.data.playerId))
+        && request.resource.data.name == get(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/players/$(request.resource.data.playerId)).data.name
+        && request.resource.data.issuedBy == request.auth.uid && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(30, 'm')
+        && request.resource.data.usedBy == '' && request.resource.data.usedAt == null;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedBy','usedAt'])
+        && validFamilyClaim(code, request.auth.uid);
+      allow delete: if false;
     }
 
     match /users/{uid} {
@@ -69,6 +119,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.fromRole == resource.data.role
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.toRole == request.resource.data.role
         && getAfter(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'APPROVED')
+        || (signedIn() && request.auth.uid == uid && validFamilyMap(uid))
         || staff()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamId', 'playerId'])
         && request.resource.data.teamId is string
@@ -99,6 +150,11 @@ service cloud.firestore {
       match /players/{playerId} {
         allow read: if staff() || assignedPlayer(teamId, playerId);
         allow write: if staff();
+        allow update: if signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUid'])
+          && validFamilyClaim(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode, request.auth.uid)
+          && get(/databases/$(database)/documents/familyCodes/$(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode)).data.teamId == teamId
+          && get(/databases/$(database)/documents/familyCodes/$(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastFamilyCode)).data.playerId == playerId;
       }
       match /trainings/{trainingId} {
         allow read: if staff() || assignedTeam(teamId);

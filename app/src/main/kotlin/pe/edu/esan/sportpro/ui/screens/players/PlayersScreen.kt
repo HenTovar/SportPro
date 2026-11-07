@@ -77,13 +77,17 @@ fun PlayersScreen(teamId: String, navController: NavHostController, embedded: Bo
         val user = (profile as? Result.Success)?.data
         if (!RolePolicy.canReadTeam(user, teamId)) estado = EstadoLista.Error("No tienes acceso a este equipo")
         else if (RolePolicy.isStaff(user?.role)) container.playerRepository.getPlayersByTeam(teamId).collect { estado = it.aEstadoLista() }
-        else if (user!!.playerId.isBlank()) estado = EstadoLista.Datos(emptyList())
-        else container.playerRepository.getPlayerById(teamId, user.playerId).collect { value ->
-            estado = when (value) {
-                is Result.Success -> EstadoLista.Datos(listOf(value.data))
-                is Result.Error -> EstadoLista.Error(value.message)
-                is Result.Loading -> EstadoLista.Cargando
+        else {
+            val children = pe.edu.esan.sportpro.data.model.FamilyPolicy.children(user).filter { it.teamId == teamId }
+            val rows = mutableListOf<Player>()
+            for (child in children) {
+                when (val result = container.playerRepository.getPlayerById(teamId, child.playerId).first { it !is Result.Loading }) {
+                    is Result.Success -> rows += result.data
+                    is Result.Error -> { estado = EstadoLista.Error(result.message); return@LaunchedEffect }
+                    else -> Unit
+                }
             }
+            estado = EstadoLista.Datos(rows)
         }
     }
 

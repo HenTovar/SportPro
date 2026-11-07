@@ -49,7 +49,8 @@ no hay AVD, imagen de sistema ni dispositivo disponible. En un dispositivo confi
 La prueba de timeout utiliza reloj virtual; no afirma una carga real en Storage. Firebase no se despliega.
 El APK de depuración está firmado para pruebas, no es un release de tienda.
 
-## Pendiente del siguiente incremento
-Vínculo familiar por código de un uso y varios hijos por padre (incluidos equipos distintos),
-con migración compatible y reglas probadas en emulador. No está implementado en este primer APK.
+## Segundo incremento
+Vínculo familiar por código de un uso y varios hijos por padre (incluidos equipos distintos)
+añadido en versionCode 4. Contrato, límites, reglas y despliegue manual en [VINCULOS_FAMILIARES.md](VINCULOS_FAMILIARES.md).
+El primer APK intermedio (versionCode 3) no lo incluía.
 La instalación y aceptación con cuentas reales y el recorrido visual en Android siguen pendientes.

@@ -59,13 +59,13 @@ fun HomeScreen(navController: NavHostController) {
         onLogout = {
             container.authRepository.logout()
             navController.navigate("login") { popUpTo(navController.graph.id) { inclusive = true }; launchSingleTop = true }
-        }, selectedTeam = session.selected, matches = matches, trainings = trainings, onRefresh = { revision++ }, agendaLoading = matchesLoading || trainingsLoading)
+        }, selectedTeam = session.selected, matches = matches, trainings = trainings, onRefresh = { revision++ }, agendaLoading = matchesLoading || trainingsLoading, familyContent = { FamilyLinkControls(session) })
 }
 
 @Composable
 fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boolean = false,
     onNavigate: (String) -> Unit = {}, onLogout: () -> Unit = {}, selectedTeam: Team? = null,
-    matches: List<LiveMatch> = emptyList(), trainings: List<Training> = emptyList(), onRefresh: () -> Unit = {}, agendaLoading: Boolean = false) {
+    matches: List<LiveMatch> = emptyList(), trainings: List<Training> = emptyList(), onRefresh: () -> Unit = {}, agendaLoading: Boolean = false, familyContent: @Composable () -> Unit = {}) {
     val staff = RolePolicy.isStaff(profile?.role)
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
@@ -85,9 +85,10 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
         if (loading || agendaLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { MessageNotice(it, true) }
         if (profile != null && profile.isActive) {
+            if (profile.role == UserRole.PADRE) familyContent()
             TeamSelector(onManage = { onNavigate("teams") })
             if (team.isBlank() && !loading) EmptyState(Icons.Default.Person, "Elige tu equipo",
-                if (staff) "Crea o selecciona un equipo para ver su agenda." else "Comparte tu código con el entrenador para vincular tu ficha o la de tu hijo.")
+                if (staff) "Crea o selecciona un equipo para ver su agenda." else if (profile.role == UserRole.PADRE) "Pide al entrenador un código e introdúcelo en Mis hijos." else "Comparte tu UID con el entrenador para vincular tu ficha.")
             if (team.isNotBlank()) {
                 SectionHeading("Hoy en ${selectedTeam?.name.orEmpty()}", "Agenda del equipo seleccionado")
                 TextButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, null); Text("Actualizar agenda") }
@@ -108,14 +109,14 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
                     })
                 } else {
                     StructurePolicy.ownAttendance(profile)?.let { destination ->
-                        ActionTile("Mi asistencia", "Historial personal", Icons.Default.Check, { onNavigate(destination) })
+                        ActionTile(if (profile.role == UserRole.PADRE) "Asistencia de mi hijo" else "Mi asistencia", "Historial personal", Icons.Default.Check, { onNavigate(destination) })
                     }
                     ActionTile("Mis partidos", "Agenda y marcadores de mi equipo", Icons.Default.PlayArrow, { onNavigate("matches/${StructurePolicy.component(team)}") })
                 }
                 ActionTile("Muro del equipo", "Publicaciones y conversaciones", Icons.Default.Favorite, { onNavigate("community/${StructurePolicy.component(team)}") })
                 ActionTile("Ficha del equipo", "Plantel · entrenamientos · partidos · muro", Icons.Default.Person, { onNavigate(StructurePolicy.team(team)) })
             }
-            if (!staff) SelectionContainer { Text("Código para tu entrenador: ${profile.uid}", style = MaterialTheme.typography.bodySmall) }
+            if (!staff && profile.role != UserRole.PADRE) SelectionContainer { Text("Código para tu entrenador: ${profile.uid}", style = MaterialTheme.typography.bodySmall) }
         }
         HorizontalDivider()
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

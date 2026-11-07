@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where, serverTimestamp, writeBatch, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where, serverTimestamp, writeBatch, onSnapshot, disableNetwork, enableNetwork, runTransaction, Timestamp } from 'firebase/firestore';
 
 let env;
 const profile = (uid, role, extra = {}) => ({ uid, role, name: uid, email: `${uid}@example.test`, active: true, teamId: '', playerId: '', ...extra });
@@ -259,4 +259,110 @@ test('community: scoped team, comments, one reaction per user, private reports a
   await assertFails(setDoc(doc(parent,`${path}/comments/after`),content('parent','Oculto')));
   await assertFails(deleteDoc(doc(c,path)));
   await assertSucceeds(getDoc(doc(c,path)));
+});
+
+// Family-link tests run only against demo-sportpro on localhost.
+const familyGift=(teamId,playerId,name,expiresAt=Timestamp.fromMillis(Date.now()+1200000))=>({teamId,playerId,name,issuedBy:'coach',createdAt:serverTimestamp(),expiresAt,usedBy:'',usedAt:null});
+async function redeemFamily(uid,code,extra={}) {
+  const client=db(uid), user=doc(client,'users',uid), invitation=doc(client,'familyCodes',code);
+  return runTransaction(client,async tx=>{
+    const account=(await tx.get(user)).data(), gift=(await tx.get(invitation)).data();
+    const children={...(account.children||{})};
+    children[gift.teamId]={...(children[gift.teamId]||{}),[gift.playerId]:{name:gift.name,code},...extra};
+    tx.update(user,{children,lastFamilyCode:code});
+    tx.update(invitation,{usedBy:uid,usedAt:serverTimestamp()});
+    tx.update(doc(client,'teams',gift.teamId,'players',gift.playerId),{parentUid:uid});
+  });
+}
+test('family: several children in same and different teams, old links retained, strangers excluded',async()=>{
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const rows={'users/family-a':profile('family-a','PADRE', {teamId:'a',playerId:'one'}),'users/family-b':profile('family-b','PADRE'),
+      'users/family-off':profile('family-off','PADRE',{active:false}),
+      'teams/fx':{active:true},'teams/fy':{active:true},
+      'teams/fx/players/k1':{name:'Uno',active:true,parentUid:null},'teams/fx/players/k2':{name:'Dos',active:true,parentUid:null},
+      'teams/fy/players/k3':{name:'Tres',active:true,parentUid:null},'teams/fx/attendance/k1':{playerId:'k1'},
+      'teams/fx/attendance/other':{playerId:'stranger'},'teams/fy/trainings/t':{active:true},
+      'matches/family':{teamA:'fy',teamB:'outside',active:true}};
+    for(const [p,d]of Object.entries(rows))await setDoc(doc(ctx.firestore(),p),d);
+  });
+  for(const [code,t,p,n]of [['ABCDEFGH2345','fx','k1','Uno'],['ABCDEFGH2346','fx','k2','Dos'],['ABCDEFGH2347','fy','k3','Tres']]) {
+    await assertSucceeds(setDoc(doc(db('coach'),'familyCodes',code),familyGift(t,p,n)));
+    await assertSucceeds(redeemFamily('family-a',code));
+  }
+  for(const path of ['teams/fx','teams/fy','teams/fx/players/k1','teams/fx/players/k2','teams/fy/players/k3','teams/fy/trainings/t','matches/family','teams/a/players/one'])
+    await assertSucceeds(getDoc(doc(db('family-a'),path)));
+  await assertSucceeds(getDocs(query(collection(db('family-a'),'teams/fx/attendance'),where('playerId','==','k1'))));
+  for(const path of ['teams/fx/players/k1','teams/fx/attendance/k1','matches/family']) await assertFails(getDoc(doc(db('family-b'),path)));
+  await assertFails(getDoc(doc(db('family-a'),'teams/fx/attendance/other')));
+  await assertFails(getDocs(collection(db('family-a'),'teams/fx/players')));
+  await assertFails(getDocs(collection(db('family-a'),'familyCodes')));
+  await assertFails(redeemFamily('family-b','ABCDEFGH2345'));await assertFails(redeemFamily('family-a','ABCDEFGH2345'));
+  const account=(await getDoc(doc(db('family-a'),'users/family-a'))).data();
+  assert.equal(Object.keys(account.children.fx).length,2);assert.equal(account.teamId,'a');assert.equal(account.playerId,'one');
+});
+test('family: expiry, wrong role, inactive, anonymous, forged profile and non-atomic writes fail',async()=>{
+  const code='ABCDEFGH2355';await assertSucceeds(setDoc(doc(db('coach'),'familyCodes',code),familyGift('fx','k1','Uno')));
+  for(const uid of ['family-b','player','family-off']) {
+    await assertFails(updateDoc(doc(db(uid),'users',uid),{children:{fx:{k1:{name:'Uno',code}}},lastFamilyCode:code}));
+    await assertFails(setDoc(doc(db(uid),'familyCodes','ABCDEFGH2366'),familyGift('fx','k1','Uno')));
+  }
+  for(const uid of ['player','family-off']) await assertFails(redeemFamily(uid,code));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'familyCodes',code)));
+  await assertFails(updateDoc(doc(db('family-b'),'familyCodes',code),{usedBy:'family-b',usedAt:serverTimestamp()}));
+  await assertFails(updateDoc(doc(db('family-b'),'teams/fx/players/k1'),{parentUid:'family-b'}));
+  await assertFails(redeemFamily('family-b',code)); // fresh code cannot steal an already-owned child
+  await assertFails(setDoc(doc(db('coach'),'familyCodes','BAD'),familyGift('fx','k1','Uno')));
+  for(const expiresAt of [Timestamp.fromMillis(Date.now()-1000),Timestamp.fromMillis(Date.now()+3600000)])
+    await assertFails(setDoc(doc(db('coach'),'familyCodes','ABCDEFGH2366'),familyGift('fx','k1','Uno',expiresAt)));
+  await env.withSecurityRulesDisabled(async ctx=>setDoc(doc(ctx.firestore(),'familyCodes/ABCDEFGH2367'),familyGift('fx','k1','Uno',Timestamp.fromMillis(Date.now()-1000))));
+  await assertFails(redeemFamily('family-b','ABCDEFGH2367'));
+  await assertFails(setDoc(doc(db('injected'),'users/injected'),profile('injected','PADRE',{children:{fx:{k1:{name:'Uno',code}}}})));
+});
+test('family: race has one winner and valid code cannot smuggle other children or mutate role',async()=>{
+  await env.withSecurityRulesDisabled(async ctx=>{
+    for(const [p,d]of Object.entries({'teams/fy/players/race':{name:'Carrera',active:true,parentUid:null},
+      'users/racer-a':profile('racer-a','PADRE'),'users/racer-b':profile('racer-b','PADRE')}))await setDoc(doc(ctx.firestore(),p),d);
+  });
+  for(const code of ['ABCDEFGH2377','ABCDEFGH2378'])await assertSucceeds(setDoc(doc(db('coach'),'familyCodes',code),familyGift('fy','race','Carrera')));
+  await assertFails(redeemFamily('racer-a','ABCDEFGH2377',{stranger:{name:'Otra',code:'ABCDEFGH2377'}}));
+  const results=await Promise.allSettled([redeemFamily('racer-a','ABCDEFGH2377'),redeemFamily('racer-b','ABCDEFGH2378')]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  const winner=results[0].status==='fulfilled'?'racer-a':'racer-b',loser=winner==='racer-a'?'racer-b':'racer-a';
+  await assertSucceeds(getDoc(doc(db(winner),'teams/fy/players/race')));
+  await assertFails(getDoc(doc(db(loser),'teams/fy/players/race')));
+});
+test('family: all three writes are mandatory; extra fields, extra teams and role changes cannot ride a code',async()=>{
+  const code='ABCDEFGH2388', client=db('family-b');
+  await env.withSecurityRulesDisabled(async ctx=>setDoc(doc(ctx.firestore(),'teams/fx/players/atomic'),{name:'Atómico',active:true,parentUid:null}));
+  await assertSucceeds(setDoc(doc(db('coach'),'familyCodes',code),familyGift('fx','atomic','Atómico')));
+  for(const omitted of ['code','profile','child']) {
+    const batch=writeBatch(client);
+    if(omitted!=='profile') batch.update(doc(client,'users/family-b'),{children:{fx:{atomic:{name:'Atómico',code}}},lastFamilyCode:code});
+    if(omitted!=='code') batch.update(doc(client,'familyCodes',code),{usedBy:'family-b',usedAt:serverTimestamp()});
+    if(omitted!=='child') batch.update(doc(client,'teams/fx/players/atomic'),{parentUid:'family-b'});
+    await assertFails(batch.commit());
+  }
+  for(const injection of [
+    {role:'ADMIN'}, {children:{fx:{atomic:{name:'Atómico',code}},fy:{k3:{name:'Tres',code}}}},
+    {children:{fx:{atomic:{name:'Fake',code}}}}
+  ]) {
+    const batch=writeBatch(client);
+    batch.update(doc(client,'users/family-b'),{children:{fx:{atomic:{name:'Atómico',code}}},lastFamilyCode:code,...injection});
+    batch.update(doc(client,'familyCodes',code),{usedBy:'family-b',usedAt:serverTimestamp()});
+    batch.update(doc(client,'teams/fx/players/atomic'),{parentUid:'family-b'});
+    await assertFails(batch.commit());
+  }
+  await assertSucceeds(redeemFamily('family-b',code));
+  const staff=(await getDoc(doc(db('coach'),'familyCodes',code))).data();assert.equal(staff.usedBy,'family-b');
+});
+test('family: community and read-only match access extend only to linked teams, inactive child never grants access',async()=>{
+  await assertSucceeds(setDoc(doc(db('family-a'),'teams/fy/posts/family'),content('family-a','Nuestro equipo')));
+  await assertSucceeds(getDoc(doc(db('family-a'),'teams/fy/posts/family')));
+  // family-b only owns a child in fx after the atomic test, not fy.
+  await assertFails(getDoc(doc(db('family-b'),'teams/fy/posts/family')));
+  await assertFails(setDoc(doc(db('family-b'),'teams/fy/posts/foreign'),content('family-b','No es mi equipo')));
+  await assertFails(updateDoc(doc(db('family-a'),'matches/family'),{status:'finished'}));
+  await env.withSecurityRulesDisabled(async ctx=>setDoc(doc(ctx.firestore(),'teams/fx/players/inactive'),{name:'Inactivo',active:false,parentUid:null}));
+  await assertSucceeds(setDoc(doc(db('coach'),'familyCodes/ABCDEFGH2399'),familyGift('fx','inactive','Inactivo')));
+  await assertFails(redeemFamily('family-b','ABCDEFGH2399'));
 });

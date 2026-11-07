@@ -61,7 +61,7 @@ class AuthRepository(
 
             // Obtener datos del usuario desde Firestore
             val userDoc = firestore.collection("users").document(uid).get().await()
-            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id) ?: throw Exception("Usuario no encontrado")
+            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id, children = pe.edu.esan.sportpro.data.model.FamilyPolicy.decode(userDoc.get("children"))) ?: throw Exception("Usuario no encontrado")
 
             emit(Result.Success(user))
         } catch (e: Exception) {
@@ -78,7 +78,7 @@ class AuthRepository(
         val currentUser = firebaseAuth.currentUser
         if (currentUser != null) {
             val userDoc = firestore.collection("users").document(currentUser.uid).get().await()
-            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id)
+            val user = userDoc.toObject(User::class.java)?.copy(uid = userDoc.id, children = pe.edu.esan.sportpro.data.model.FamilyPolicy.decode(userDoc.get("children")))
             emit(Result.Success(user))
         } else {
             emit(Result.Success(null))

@@ -53,16 +53,18 @@ import java.util.Locale
 @Composable
 fun TrainingsScreen(teamId: String, navController: NavHostController, embedded: Boolean = false) {
     BindSelectedTeam(teamId)
+    val familySession = pe.edu.esan.sportpro.ui.navigation.LocalTeamSession.current
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
     var ownPlayerId by remember { mutableStateOf("") }
     var estado by remember { mutableStateOf<EstadoLista<Training>>(EstadoLista.Cargando) }
     val formatoFecha = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE")) }
 
-    LaunchedEffect(teamId) {
+    LaunchedEffect(teamId, familySession.child?.key) {
         val profile = container.authRepository.getCurrentUser().first { it !is Result.Loading }
         val user = (profile as? Result.Success)?.data
-        ownPlayerId = user?.playerId.orEmpty()
+        ownPlayerId = familySession.child?.takeIf { it.teamId == teamId }?.playerId
+            ?: pe.edu.esan.sportpro.data.model.FamilyPolicy.children(user).firstOrNull { it.teamId == teamId }?.playerId.orEmpty()
         if (!RolePolicy.canReadTeam(user, teamId)) estado = EstadoLista.Error("No tienes acceso a este equipo")
         else container.trainingRepository.getTrainingsByTeam(teamId).collect { estado = it.aEstadoLista() }
     }

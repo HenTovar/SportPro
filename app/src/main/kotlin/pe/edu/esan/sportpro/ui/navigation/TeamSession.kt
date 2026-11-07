@@ -15,7 +15,11 @@ data class TeamSession(
     val selected: Team? = null,
     val loading: Boolean = true,
     val error: String? = null,
-    val select: (String) -> Unit = {}
+    val select: (String) -> Unit = {},
+    val account: User? = profile,
+    val child: FamilyChild? = null,
+    val selectChild: (String) -> Unit = {},
+    val refresh: () -> Unit = {}
 )
 val LocalTeamSession = staticCompositionLocalOf { TeamSession() }
 
@@ -33,12 +37,14 @@ fun rememberTeamSession(refreshKey: String = ""): TeamSession {
     val container = remember { DefaultAppContainer() }
     val prefs = remember { context.getSharedPreferences("navigation", Context.MODE_PRIVATE) }
     var remembered by remember(uid) { mutableStateOf(if (uid.isBlank()) "" else prefs.getString(StructurePolicy.selectionKey(uid)!!, "").orEmpty()) }
+    var childKey by remember(uid) { mutableStateOf(if (uid.isBlank()) "" else prefs.getString("last_child_$uid", "").orEmpty()) }
+    var revision by remember { mutableIntStateOf(0) }
     var profile by remember(uid) { mutableStateOf<User?>(null) }
     var teams by remember(uid) { mutableStateOf<List<Team>>(emptyList()) }
     var loading by remember(uid) { mutableStateOf(true) }
     var error by remember(uid) { mutableStateOf<String?>(null) }
-    LaunchedEffect(uid, refreshKey) {
-        loading = true; error = null; teams = emptyList()
+    LaunchedEffect(uid, refreshKey, revision) {
+        loading = true; error = null; teams = emptyList(); profile = null
         if (uid.isBlank()) { loading = false; return@LaunchedEffect }
         when (val result = container.authRepository.getCurrentUser().first { it !is Result.Loading }) {
             is Result.Success -> profile = result.data?.takeIf { it.uid == uid }
@@ -53,26 +59,40 @@ fun rememberTeamSession(refreshKey: String = ""): TeamSession {
                     is Result.Error -> error = result.message
                     else -> Unit
                 }
-            } else if (user.teamId.isNotBlank()) {
-                when (val result = container.teamRepository.getTeamById(user.teamId).first { it !is Result.Loading }) {
-                    is Result.Success -> teams = listOf(result.data)
+            } else {
+                val ids = (FamilyPolicy.children(user).map { it.teamId } + user.teamId).filter { it.isNotBlank() }.distinct()
+                val loaded = mutableListOf<Team>()
+                ids.forEach { id -> when (val result = container.teamRepository.getTeamById(id).first { it !is Result.Loading }) {
+                    is Result.Success -> loaded += result.data
                     is Result.Error -> error = result.message
                     else -> Unit
-                }
+                } }
+                teams = loaded
             }
         }
         loading = false
     }
-    val selected = StructurePolicy.selectedTeam(profile, remembered, teams)
+    val child = FamilyPolicy.selected(profile, childKey)
+    val displayProfile = if (profile?.role == UserRole.PADRE && child != null)
+        profile?.copy(teamId = child.teamId, playerId = child.playerId) else profile
+    val selected = StructurePolicy.selectedTeam(displayProfile, remembered, teams)
     LaunchedEffect(uid, selected?.id) {
         if (uid.isNotBlank() && selected != null) prefs.edit().putString(StructurePolicy.selectionKey(uid)!!, selected.id).apply()
     }
-    return TeamSession(profile, teams, selected, loading, error) { id ->
+    return TeamSession(displayProfile, teams, selected, loading, error, select = { id ->
         if (teams.any { it.id == id && it.isActive && RolePolicy.canReadTeam(profile, id) }) {
             remembered = id
+            if (profile?.role == UserRole.PADRE) FamilyPolicy.children(profile).firstOrNull { it.teamId == id }?.let {
+                childKey = it.key; prefs.edit().putString("last_child_$uid", it.key).apply()
+            }
             if (uid.isNotBlank()) prefs.edit().putString(StructurePolicy.selectionKey(uid)!!, id).apply()
         }
-    }
+    }, account = profile, child = child, selectChild = { key ->
+        if (FamilyPolicy.children(profile).any { it.key == key }) {
+            childKey = key
+            prefs.edit().putString("last_child_$uid", key).apply()
+        }
+    }, refresh = { revision++ })
 }
 
 /** Keep route context aligned after the authenticated team list has loaded. */

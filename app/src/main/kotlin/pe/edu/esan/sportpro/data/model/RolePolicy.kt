@@ -4,10 +4,11 @@ object RolePolicy {
     val registrationRoles = listOf(UserRole.ENTRENADOR, UserRole.JUGADOR, UserRole.PADRE)
     fun isStaff(role: UserRole?) = role == UserRole.ADMIN || role == UserRole.ENTRENADOR
     fun canReadTeam(user: User?, teamId: String) = user != null && teamId.isNotBlank() &&
-        (isStaff(user.role) || user.teamId == teamId)
+        (isStaff(user.role) || user.teamId == teamId || FamilyPolicy.children(user).any { it.teamId == teamId })
     fun canReadPlayer(user: User?, teamId: String, playerId: String) =
         canReadTeam(user, teamId) && playerId.isNotBlank() &&
-            (isStaff(user?.role) || user?.playerId == playerId)
+            (isStaff(user?.role) || (user?.teamId == teamId && user.playerId == playerId) ||
+                FamilyPolicy.children(user).any { it.teamId == teamId && it.playerId == playerId })
     /** Creator must be derived from verified Firebase Auth claims, never profile fields. */
     fun canApprove(approver: UserRole?, creator: Boolean, toRole: UserRole): Boolean =
         if (creator) true else when (toRole) {

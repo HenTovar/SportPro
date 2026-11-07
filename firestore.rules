@@ -307,6 +307,7 @@ service cloud.firestore {
       let personal=get(/databases/$(database)/documents/guidedProfiles/$(uid)).data;
       return signedIn() && request.auth.uid==uid && u.role=='JUGADOR' && u.get('active',u.get('isActive',false))==true
         && u.get('teamId','')=='' && u.get('playerId','')==''
+        && u.get('lastFamilyRevocation',null)==null
         && code.matches('[A-HJ-NP-Z2-9]{12}') && d.expiresAt>request.time
         && d.count is int && d.count>=0 && d.count<40 && state.code==code && state.revoked==false
         && activeTeam(d.teamId)

@@ -1,4 +1,4 @@
-# Vínculos familiares — 1.2.0 (versionCode 4)
+# Vínculos familiares — 1.2.0 (versionCode 5)
 
 ## Uso
 1. El entrenador crea/guarda la ficha y vuelve a **Editar jugador**.
@@ -34,9 +34,16 @@ Los vínculos antiguos `teamId/playerId` permanecen y se presentan como la prime
 - Límite preventivo: 20 equipos por perfil y 20 hijos por equipo, además del enlace legado.
 - El código es un secreto de un uso: compartirlo sólo con el apoderado previsto. No hay verificación
   externa de parentesco ni rate-limit de intentos; la posesión del código autoriza el vínculo.
-- El registro público ENTRENADOR y su autoridad de staff son **heredados**. No equivalen a una
-  acreditación profesional. Esta ampliación no cambia esa política ni la vuelve segura frente a
-  una cuenta que se registre legítimamente como staff. Revisar esa política antes de operar con menores reales.
+- El alta propia sólo permite JUGADOR y PADRE. Elegir Entrenador crea un JUGADOR sin asignación
+  y una solicitud PENDING; sólo un ADMIN activo puede aprobar ENTRENADOR. La cuenta creadora sin
+  rol ADMIN tampoco puede conceder este rol. Los entrenadores existentes conservan sus permisos.
+- Las cuentas que ya se registraron como ENTRENADOR antes de estas reglas no se revocan automáticamente.
+  El propietario debe revisar su legitimidad antes de operar con datos reales de menores. Este cambio
+  impide nuevas altas privilegiadas; no prueba retrospectivamente quién debía tener acceso.
+- Cada cambio de rol aprobado exige children vacío en la misma transacción; volver a PADRE no
+  reactiva un mapa antiguo. Esto no borra teamId/playerId legado ni cambia parentUid de las fichas.
+- El límite de emisión por staff y la retención del nombre en códigos son pendientes: aún no hay cuota
+  de emisión ni borrado de códigos usados. No se atribuye esa protección al generador aleatorio.
 - Retirar un vínculo requiere administración de confianza que retire la entrada en `children`
   y el `parentUid` correspondiente; no se añade un borrado destructivo automático.
 

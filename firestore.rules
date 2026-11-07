@@ -19,9 +19,10 @@ service cloud.firestore {
       return activeUser() && profile().role in ['ADMIN', 'ENTRENADOR'];
     }
     function mayApprove(target) {
-      return creator() || (activeUser() &&
-        ((target in ['JUGADOR', 'PADRE'] && profile().role in ['ENTRENADOR', 'ADMIN'])
-          || (target == 'ENTRENADOR' && profile().role == 'ADMIN')));
+      // Only an active ADMIN can grant staff, including when the actor is the creator.
+      return (target == 'ENTRENADOR' && activeUser() && profile().role == 'ADMIN')
+        || (target != 'ENTRENADOR' && (creator() || (activeUser()
+          && target in ['JUGADOR', 'PADRE'] && profile().role in ['ENTRENADOR', 'ADMIN'])));
     }
     function validRequest(uid) {
       return request.auth.uid == uid
@@ -106,14 +107,15 @@ service cloud.firestore {
           'uid', 'name', 'email', 'role', 'photoUrl', 'createdAt', 'active', 'isActive', 'teamId', 'playerId'
         ])
         && request.resource.data.uid == uid
-        && request.resource.data.role in ['ENTRENADOR', 'JUGADOR', 'PADRE']
+        && request.resource.data.role in ['JUGADOR', 'PADRE']
         && request.resource.data.get('teamId', '') == ''
         && request.resource.data.get('playerId', '') == ''
         && request.resource.data.get('active', true) == true
         && request.resource.data.get('isActive', true) == true;
       // Sólo el creador verificado aprueba solicitudes ajenas mediante escritura atómica.
       allow update: if (signedIn() && request.auth.uid != uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'children'])
+        && request.resource.data.get('children', {}) == {}
         && mayApprove(request.resource.data.role)
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.status == 'PENDING'
         && get(/databases/$(database)/documents/roleRequests/$(uid)).data.fromRole == resource.data.role

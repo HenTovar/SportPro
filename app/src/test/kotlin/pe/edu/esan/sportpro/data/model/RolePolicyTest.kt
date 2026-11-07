@@ -5,7 +5,7 @@ import org.junit.Test
 
 class RolePolicyTest {
     @Test fun registrationNeverOffersAdmin() {
-        assertEquals(setOf(UserRole.ENTRENADOR, UserRole.JUGADOR, UserRole.PADRE), RolePolicy.registrationRoles.toSet())
+        assertEquals(setOf(UserRole.JUGADOR, UserRole.PADRE), RolePolicy.registrationRoles.toSet())
         assertFalse(UserRole.ADMIN in RolePolicy.registrationRoles)
     }
     @Test fun playerAndParentOnlySeeTheirLinkedTeamAndPlayer() {
@@ -31,5 +31,23 @@ class RolePolicyTest {
             assertTrue(RolePolicy.canReadPlayer(User(role = role), "team", "player"))
         }
         assertFalse(RolePolicy.isStaff(null))
+    }
+    @Test fun coachChoiceCreatesOnlyBasePlayer() {
+        assertTrue(UserRole.ENTRENADOR in RolePolicy.registrationChoices)
+        assertFalse(UserRole.ENTRENADOR in RolePolicy.registrationRoles)
+        assertEquals(UserRole.JUGADOR,RolePolicy.registrationBaseRole(UserRole.ENTRENADOR))
+        assertEquals(UserRole.PADRE,RolePolicy.registrationBaseRole(UserRole.PADRE))
+    }
+    @Test fun adminCanNeverBeSelectedAsBaseRole() {
+        assertThrows(IllegalArgumentException::class.java) { RolePolicy.registrationBaseRole(UserRole.ADMIN) }
+    }
+    @Test fun creatorWithoutAdminCannotGrantCoach() {
+        for(role in listOf(UserRole.JUGADOR,UserRole.PADRE,UserRole.ENTRENADOR))
+            assertFalse(RolePolicy.canApprove(role,true,UserRole.ENTRENADOR))
+        assertTrue(RolePolicy.canApprove(UserRole.ADMIN,true,UserRole.ENTRENADOR))
+    }
+    @Test fun leavingParentClearsOnlyFamilyMapInSameApproval() {
+        assertEquals(mapOf("role" to "JUGADOR", "children" to emptyMap<String,Any>()),RolePolicy.approvalFields(UserRole.JUGADOR))
+        assertEquals(mapOf("role" to "PADRE", "children" to emptyMap<String,Any>()),RolePolicy.approvalFields(UserRole.PADRE))
     }
 }

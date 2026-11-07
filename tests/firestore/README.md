@@ -20,7 +20,7 @@ y compatibilidad de `active` frente al campo legado `isActive`.
 
 Contrato de datos:
 
-- Registro: ENTRENADOR/JUGADOR/PADRE, `teamId` y `playerId` ausentes o vacíos.
+- Registro: sólo JUGADOR/PADRE, `teamId` y `playerId` ausentes o vacíos.
 - ADMIN: provisionado por administrador de confianza en consola/Admin SDK.
 - Roles inmutables para todos los clientes. Staff sólo puede modificar en users
   los campos `teamId` y `playerId`; no se usan reglas de propietario editables.
@@ -36,8 +36,18 @@ Contrato de datos:
   `isActive` sólo si falta `active`. Un `active=false` prevalece. El filtrado de
   entidades archivadas sigue siendo presentación; su lectura permanece limitada
   por rol/asignación y no exige índices ni filtros de actividad.
-- ENTRENADOR sigue siendo un rol de registro permitido por requisito y concede
-  acceso de staff. Esta política no equivale a validar acreditación de entrenadores.
+- Elegir ENTRENADOR en la app crea un JUGADOR y una solicitud de rol pendiente. Sólo un ADMIN
+  activo aprueba ese destino (ni otro ENTRENADOR ni un creador sin ADMIN). La solicitud por sí sola
+  nunca concede staff. Los entrenadores existentes siguen funcionando.
+
+Control de regresión enfocado (dentro de un emulador local):
+
+```sh
+node registration-control.mjs
+# Para demostrar que detecta las reglas antiguas (salida esperada: FAIL):
+node registration-control.mjs /ruta/al/respaldo/firestore.rules
+```
+El control ejecuta alta de ENTRENADOR y lectura de una ficha de otra familia: ambos deben denegarse.
 
 Estas pruebas validan el archivo local; no demuestran que un proyecto remoto lo
 haya desplegado. No se ha ejecutado ningún despliegue.

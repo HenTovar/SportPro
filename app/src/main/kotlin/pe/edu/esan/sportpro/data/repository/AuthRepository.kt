@@ -29,7 +29,7 @@ class AuthRepository(
     ): Flow<Result<User>> = flow {
         try {
             emit(Result.Loading())
-            require(role in pe.edu.esan.sportpro.data.model.RolePolicy.registrationRoles) { "El administrador se asigna fuera del registro" }
+            val baseRole = pe.edu.esan.sportpro.data.model.RolePolicy.registrationBaseRole(role)
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val uid = authResult.user?.uid ?: throw Exception("No UID obtenido")
 
@@ -38,11 +38,24 @@ class AuthRepository(
                 uid = uid,
                 email = email,
                 name = name,
-                role = role,
+                role = baseRole,
                 createdAt = System.currentTimeMillis()
             )
 
             firestore.collection("users").document(uid).set(user).await()
+            if (role == UserRole.ENTRENADOR) {
+                try {
+                    // The base profile must exist before validRequest can inspect its source role.
+                    firestore.collection("roleRequests").document(uid).set(mapOf(
+                        "uid" to uid, "email" to checkNotNull(authResult.user?.email),
+                        "fromRole" to baseRole.name, "toRole" to UserRole.ENTRENADOR.name,
+                        "status" to "PENDING", "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )).await()
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    throw IllegalStateException("Tu cuenta se creó como Jugador, pero no se pudo enviar la solicitud. Inicia sesión y solicítala desde Perfil; no tienes acceso de entrenador.", e)
+                }
+            }
             emit(Result.Success(user))
         } catch (e: Exception) {
             if (e is CancellationException) throw e

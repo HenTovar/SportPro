@@ -41,12 +41,13 @@ before(async () => {
 after(async () => { if (env) await env.cleanup(); });
 
 test('registration permits exactly public roles and rejects ADMIN, linkage and foreign profile', async () => {
-  for (const role of ['ENTRENADOR', 'JUGADOR', 'PADRE']) {
+  for (const role of ['JUGADOR', 'PADRE']) {
     const uid = `new-${role}`;
     await assertSucceeds(setDoc(doc(db(uid), 'users', uid), profile(uid, role)));
   }
   for (const [uid, data] of [
     ['new-admin', profile('new-admin', 'ADMIN')],
+    ['new-coach', profile('new-coach', 'ENTRENADOR')],
     ['linked', profile('linked', 'JUGADOR', { teamId: 'a', playerId: 'one' })],
     ['unknown', profile('unknown', 'OWNER')]
   ]) await assertFails(setDoc(doc(db(uid), 'users', uid), data));
@@ -101,7 +102,7 @@ test('role approval matrix is enforced by Firestore with atomic writes', async (
     ['coach', ['JUGADOR', 'PADRE']],
     ['admin', ['JUGADOR', 'PADRE', 'ENTRENADOR']],
     ['player', []], ['parent', []],
-    ['henry', ['JUGADOR', 'PADRE', 'ENTRENADOR', 'ADMIN']]
+    ['henry', ['JUGADOR', 'PADRE', 'ADMIN']]
   ];
   const claims = uid => uid === 'henry' ? { email: 'harontovar@gmail.com', email_verified: true } : { email: `${uid}@example.test`, email_verified: true };
   for (const [actor, allowed] of actors) {
@@ -365,4 +366,59 @@ test('family: community and read-only match access extend only to linked teams, 
   await env.withSecurityRulesDisabled(async ctx=>setDoc(doc(ctx.firestore(),'teams/fx/players/inactive'),{name:'Inactivo',active:false,parentUid:null}));
   await assertSucceeds(setDoc(doc(db('coach'),'familyCodes/ABCDEFGH2399'),familyGift('fx','inactive','Inactivo')));
   await assertFails(redeemFamily('family-b','ABCDEFGH2399'));
+});
+
+
+test('coach signup: direct staff creation is denied; requesting does not grant family access; ADMIN approval does',async()=>{
+  const uid='coach-applicant', client=env.authenticatedContext(uid,{email:`${uid}@example.test`}).firestore();
+  await assertFails(setDoc(doc(client,'users',uid),profile(uid,'ENTRENADOR')));
+  await assertSucceeds(setDoc(doc(client,'users',uid),profile(uid,'JUGADOR')));
+  await assertSucceeds(setDoc(doc(client,'roleRequests',uid),{uid,email:`${uid}@example.test`,fromRole:'JUGADOR',toRole:'ENTRENADOR',status:'PENDING',createdAt:serverTimestamp()}));
+  await assertFails(getDocs(collection(client,'teams')));
+  await assertFails(getDoc(doc(client,'teams/fx/players/k1')));
+  await assertFails(getDoc(doc(client,'users/family-a')));
+  const approve=(actor)=>{const c=db(actor),b=writeBatch(c);b.update(doc(c,'users',uid),{role:'ENTRENADOR'});b.update(doc(c,'roleRequests',uid),{status:'APPROVED'});return b.commit()};
+  await assertFails(approve('coach'));
+  await assertFails(approve('inactive'));
+  await assertFails(updateDoc(doc(db('admin'),'users',uid),{role:'ENTRENADOR'}));
+  await assertFails(updateDoc(doc(db('admin'),'roleRequests',uid),{status:'APPROVED'}));
+  assert.equal((await getDoc(doc(client,'users',uid))).data().role,'JUGADOR');
+  await assertSucceeds(approve('admin'));
+  assert.equal((await getDoc(doc(client,'users',uid))).data().role,'ENTRENADOR');
+  await assertSucceeds(getDocs(collection(client,'teams')));
+  await assertSucceeds(getDoc(doc(client,'teams/fx/players/k1')));
+  await assertSucceeds(getDoc(doc(client,'users/family-a')));
+});
+test('coach signup: creator without ADMIN cannot approve coach, existing coaches retain staff and nonstaff approval',async()=>{
+  const uid='creator-coach-applicant', owner=env.authenticatedContext(uid,{email:`${uid}@example.test`}).firestore();
+  await assertSucceeds(setDoc(doc(owner,'users',uid),profile(uid,'PADRE')));
+  await assertSucceeds(setDoc(doc(owner,'roleRequests',uid),{uid,email:`${uid}@example.test`,fromRole:'PADRE',toRole:'ENTRENADOR',status:'PENDING',createdAt:serverTimestamp()}));
+  const creator=env.authenticatedContext('henry',{email:'harontovar@gmail.com',email_verified:true}).firestore();
+  const batch=writeBatch(creator);batch.update(doc(creator,'users',uid),{role:'ENTRENADOR'});batch.update(doc(creator,'roleRequests',uid),{status:'APPROVED'});
+  await assertFails(batch.commit());
+  // Existing role is not rewritten or revoked by the new self-registration restriction.
+  for(const id of ['coach','legacy']) {await assertSucceeds(getDocs(collection(db(id),'teams')));await assertSucceeds(getDoc(doc(db(id),'teams/fx/players/k1')))}
+});
+
+test('family role transition: clear children atomically and never reactivate on return',async()=>{
+  const uid='role-family', email=uid+'@example.test',owner=env.authenticatedContext(uid,{email}).firestore();
+  await env.withSecurityRulesDisabled(async c=>setDoc(doc(c.firestore(),'users',uid),profile(uid,'PADRE',{children:{fx:{k1:{name:'Uno',code:'ABCDEFGH2345'}}}})));
+  const request=(fromRole,toRole)=>setDoc(doc(owner,'roleRequests',uid),{uid,email,fromRole,toRole,status:'PENDING',createdAt:serverTimestamp()});
+  await assertSucceeds(request('PADRE','JUGADOR'));
+  const coach=db('coach');const bad=writeBatch(coach);bad.update(doc(coach,'users',uid),{role:'JUGADOR'});bad.update(doc(coach,'roleRequests',uid),{status:'APPROVED'});await assertFails(bad.commit());
+  const good=writeBatch(coach);good.update(doc(coach,'users',uid),{role:'JUGADOR',children:{}});good.update(doc(coach,'roleRequests',uid),{status:'APPROVED'});await assertSucceeds(good.commit());
+  assert.deepEqual((await getDoc(doc(owner,'users',uid))).data().children,{});
+  await assertFails(getDoc(doc(owner,'teams/fx/players/k1')));
+  await assertSucceeds(request('JUGADOR','PADRE'));
+  const back=writeBatch(coach);back.update(doc(coach,'users',uid),{role:'PADRE'});back.update(doc(coach,'roleRequests',uid),{status:'APPROVED'});await assertSucceeds(back.commit());
+  await assertFails(getDoc(doc(owner,'teams/fx/players/k1')));
+  assert.deepEqual((await getDoc(doc(owner,'users',uid))).data().children,{});
+});
+test('family role transition: old maps on a non-parent also cannot reactivate via a role approval',async()=>{
+  const uid='old-map',email=uid+'@example.test',owner=env.authenticatedContext(uid,{email}).firestore(),coach=db('coach');
+  await env.withSecurityRulesDisabled(async c=>setDoc(doc(c.firestore(),'users',uid),profile(uid,'JUGADOR',{children:{fx:{k1:{name:'Old',code:'ABCDEFGH2345'}}}})));
+  await assertSucceeds(setDoc(doc(owner,'roleRequests',uid),{uid,email,fromRole:'JUGADOR',toRole:'PADRE',status:'PENDING',createdAt:serverTimestamp()}));
+  const bad=writeBatch(coach);bad.update(doc(coach,'users',uid),{role:'PADRE'});bad.update(doc(coach,'roleRequests',uid),{status:'APPROVED'});await assertFails(bad.commit());
+  const good=writeBatch(coach);good.update(doc(coach,'users',uid),{role:'PADRE',children:{}});good.update(doc(coach,'roleRequests',uid),{status:'APPROVED'});await assertSucceeds(good.commit());
+  await assertFails(getDoc(doc(owner,'teams/fx/players/k1')));
 });

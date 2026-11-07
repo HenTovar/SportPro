@@ -29,7 +29,7 @@ fun RegisterScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.registerSuccess) {
-        if (uiState.registerSuccess) {
+        if (uiState.registerSuccess && uiState.registrationNotice == null) {
             navController.navigate(NavigationRoute.HOME) {
                 popUpTo(NavigationRoute.REGISTER) { inclusive = true }
             }
@@ -101,16 +101,28 @@ fun RegisterScreen(
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            pe.edu.esan.sportpro.data.model.RolePolicy.registrationRoles.forEach { role ->
+            pe.edu.esan.sportpro.data.model.RolePolicy.registrationChoices.forEach { role ->
                 FilterChip(
                     selected = uiState.selectedRole == role,
                     onClick = { viewModel.setRole(role) },
-                    label = { Text(role.name) },
+                    label = { Text(if (role == UserRole.ENTRENADOR) "Entrenador (solicitud)" else pe.edu.esan.sportpro.data.model.RolePolicy.label(role)) },
                     modifier = Modifier.weight(1f).padding(4.dp)
                 )
             }
         }
 
+        if (uiState.selectedRole == UserRole.ENTRENADOR) {
+            Text("La cuenta se crea como Jugador. Un administrador debe aprobar tu solicitud antes de que puedas trabajar como entrenador.")
+        }
+        uiState.registrationNotice?.let { notice ->
+            Text(notice, color = MaterialTheme.colorScheme.primary)
+            Button(onClick = {
+                viewModel.clearSuccess()
+                navController.navigate(NavigationRoute.HOME) {
+                    popUpTo(NavigationRoute.REGISTER) { inclusive = true }
+                }
+            }) { Text("Entendido, ir al inicio") }
+        }
         Spacer(modifier = Modifier.height(32.dp))
 
         Button(
@@ -118,7 +130,7 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
-            enabled = !uiState.isLoading
+            enabled = !uiState.isLoading && !uiState.registerSuccess
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(

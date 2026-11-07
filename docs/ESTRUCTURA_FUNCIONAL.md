@@ -54,3 +54,7 @@ Vínculo familiar por código de un uso y varios hijos por padre (incluidos equi
 añadido en versionCode 4. Contrato, límites, reglas y despliegue manual en [VINCULOS_FAMILIARES.md](VINCULOS_FAMILIARES.md).
 El primer APK intermedio (versionCode 3) no lo incluía.
 La instalación y aceptación con cuentas reales y el recorrido visual en Android siguen pendientes.
+
+## Sucesor de seguridad (versionCode 5)
+El registro ya no concede ENTRENADOR: crea JUGADOR y solicitud pendiente. Sólo ADMIN activo
+aprueba el ascenso. Las reglas anteriores y APK code4 no deben distribuirse como versión corregida.

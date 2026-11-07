@@ -1,13 +1,21 @@
 package pe.edu.esan.sportpro.ui.screens.matches
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -20,6 +28,8 @@ import pe.edu.esan.sportpro.data.repository.MatchRepository
 import pe.edu.esan.sportpro.di.DefaultAppContainer
 import pe.edu.esan.sportpro.ui.navigation.safeBack
 import pe.edu.esan.sportpro.ui.viewmodel.LiveMatchViewModel
+import pe.edu.esan.sportpro.ui.common.*
+import pe.edu.esan.sportpro.ui.theme.SportProTheme
 
 @Composable
 fun LiveMatchScreen(id:String,nav:NavHostController) {
@@ -28,78 +38,111 @@ fun LiveMatchScreen(id:String,nav:NavHostController) {
             LiveMatchViewModel(id,MatchRepository(FirebaseFirestore.getInstance(),FirebaseAuth.getInstance()),DefaultAppContainer().authRepository) as T
     })
     val state by vm.state.collectAsState();val match=state.feed.match
-    var editor by remember { mutableStateOf(false) };var editing by remember { mutableStateOf<MatchEvent?>(null) }
-    var catalog by remember { mutableStateOf(false) };var summary by remember { mutableStateOf(false) }
+    var editor by remember {mutableStateOf(false)};var editing by remember {mutableStateOf<MatchEvent?>(null)}
+    var catalog by remember {mutableStateOf(false)};var summary by remember {mutableStateOf(false)}
     val staff=RolePolicy.isStaff(state.profile?.role)
-    Scaffold(topBar={TopAppBar(title={Text(match?.name ?: "Partido en vivo")},navigationIcon={TextButton(onClick={nav.safeBack()}){Text("Volver")}})}) { padding ->
-        LazyColumn(Modifier.padding(padding).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    Scaffold(topBar={TopAppBar(title={Text("Centro del partido")},navigationIcon={BackButton {nav.safeBack()}})}) { padding ->
+        LazyColumn(Modifier.padding(padding),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             item {
-                if(match==null) CircularProgressIndicator() else {
-                    val score=MatchFacts.score(match,state.feed.events)
-                    Text("Equipo A ${score.first} — ${score.second} Equipo B",style=MaterialTheme.typography.headlineMedium)
-                    Text(when(match.status){"finished"->"Finalizado";"in_progress"->"En juego";else->"Programado"})
-                }
-                Text(if(state.feed.pending)"Hay cambios locales pendientes de sincronizar" else if(state.feed.cached)"Datos de caché: espera conexión para confirmar" else "Sincronizado en tiempo real")
-                state.error?.let { Text(it,color=MaterialTheme.colorScheme.error);TextButton(onClick=vm::clearError){Text("Cerrar aviso")} }
+                if(match!=null)MatchBroadcastHeader(match,state.feed.events)
+                else if(state.error==null)LinearProgressIndicator(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                if(match!=null)StatusBadge(if(state.feed.pending)"Cambios por sincronizar" else if(state.feed.cached)"Sin confirmar · caché" else "Sincronizado en tiempo real",
+                    if(state.feed.pending||state.feed.cached)BadgeTone.Warning else BadgeTone.Positive)
+                state.error?.let {Spacer(Modifier.height(12.dp));MessageNotice(it,true);TextButton(onClick=vm::clearError,modifier=Modifier.heightIn(min=48.dp)){Text("Cerrar aviso")}}
             }
             if(staff&&match!=null)item {
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Button(onClick={editing=null;editor=true},enabled=!state.busy&&state.feed.types.any { it.active }){Text("Registrar evento")}
-                    TextButton(onClick={catalog=true}){Text("Catálogo")}
-                }
-                Row {
-                    TextButton(onClick={vm.setStatus("in_progress")},enabled=!state.busy){Text("Iniciar")}
-                    TextButton(onClick={vm.setStatus("finished")},enabled=!state.busy){Text("Finalizar")}
-                    TextButton(onClick={summary=true}){Text("Resumen IA")}
-                }
-                Text("Jugador y minuto pueden quedar desconocidos. No registres contactos ni datos privados en observaciones.",style=MaterialTheme.typography.bodySmall)
+                ElevatedCard(elevation=CardDefaults.elevatedCardElevation(defaultElevation=2.dp)) {Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Text("Mesa de control",style=MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Button(onClick={editing=null;editor=true},enabled=!state.busy&&state.feed.types.any {it.active},modifier=Modifier.weight(1f).heightIn(min=48.dp)) {Icon(Icons.Default.Add,null);Spacer(Modifier.width(8.dp));Text("Evento")}
+                        OutlinedButton(onClick={catalog=true},modifier=Modifier.heightIn(min=48.dp)){Text("Catálogo")}
+                    }
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                        TextButton(onClick={vm.setStatus("in_progress")},enabled=!state.busy,modifier=Modifier.heightIn(min=48.dp)){Text("Iniciar")}
+                        TextButton(onClick={vm.setStatus("finished")},enabled=!state.busy,modifier=Modifier.heightIn(min=48.dp)){Text("Finalizar")}
+                        TextButton(onClick={summary=true},modifier=Modifier.heightIn(min=48.dp)){Text("Resumen IA")}
+                    }
+                    Text("¿Falta un dato? Puedes dejar minuto o jugador desconocidos. Evita datos privados en las observaciones.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }}
             }
             if(state.narrative.text.isNotBlank())item {
                 val stale=state.narrative.sourceVersion!=match?.eventVersion||state.narrative.sourceHash!=MatchFacts.hash(state.feed.events)
                 val approved=state.narrative.state=="APPROVED"&&!stale
-                // Readers only see an approved, current text; staff can inspect a draft.
-                if(staff||approved)Card {Column(Modifier.padding(12.dp)) {
-                    Text(if(stale)"Resumen desactualizado: necesita otra revisión" else if(approved)"Resumen aprobado por el entrenador" else "Borrador IA: pendiente de revisión")
-                    Text(state.narrative.text)
+                if(staff||approved)ElevatedCard {Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                    StatusBadge(if(stale)"Necesita nueva revisión" else if(approved)"Aprobado por el entrenador" else "Borrador · revisión pendiente",if(approved)BadgeTone.Positive else BadgeTone.Warning)
+                    Text("La historia del partido",style=MaterialTheme.typography.titleMedium)
+                    Text(state.narrative.text,style=MaterialTheme.typography.bodyLarge)
                 }}
             }
-            item {Text("Cronología (${state.feed.events.size})",style=MaterialTheme.typography.titleLarge)}
-            items(state.feed.events,key={it.id}) { event ->
-                Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(12.dp)) {
-                    Text("${event.minute?.let { "$it'" } ?: "Minuto desconocido"} · ${event.typeLabel}${if(event.voided)" · ANULADO" else ""}")
-                    Text("Equipo ${if(event.teamId==match?.teamA)"A" else "B"} · ${event.player.ifBlank { "Jugador desconocido" }}")
-                    if(event.note.isNotBlank())Text(event.note)
-                    Text("Revisión ${event.revision} · autor ${event.createdBy.take(8)} · último cambio ${event.updatedBy.take(8)}",style=MaterialTheme.typography.bodySmall)
-                    Row {
-                        TextButton(onClick={vm.history(event)}){Text("Historial")}
-                        if(staff)TextButton(onClick={editing=event;editor=true},enabled=!state.busy&&!state.feed.cached&&!state.feed.pending){Text("Corregir / anular")}
-                    }
-                }}
-            }
+            item {SectionHeading("Minuto a minuto","${state.feed.events.size} registros · las anulaciones conservan su historial")}
+            if(match!=null&&state.feed.events.isEmpty())item {EmptyState(Icons.Default.PlayArrow,"El partido está por escribirse",if(staff)"Registra el primer evento desde la mesa de control." else "Aquí aparecerán las jugadas que registre el entrenador.")}
+            items(state.feed.events,key={it.id}) {event->MatchTimelineCard(event,match?.teamA.orEmpty(),staff,
+                !state.busy&&!state.feed.cached&&!state.feed.pending,{vm.history(event)},{editing=event;editor=true})}
         }
     }
-    if(editor&&match!=null)EventEditor(match,state.feed.types,editing,onDismiss={editor=false},onSave={type,minute,team,player,note,voided->
-        vm.saveEvent(editing,type,minute,team,player,note,voided);editor=false
-    })
+    if(editor&&match!=null)EventEditor(match,state.feed.types,editing,onDismiss={editor=false},onSave={type,minute,team,player,note,voided->vm.saveEvent(editing,type,minute,team,player,note,voided);editor=false})
     if(catalog)CatalogEditor(state.feed.types,{catalog=false},vm::saveType)
-    state.history?.let { entries ->AlertDialog(onDismissRequest=vm::closeHistory,title={Text("Historial inmutable")},text={Column(Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState())) {
-        entries.forEach { Text("${it.previous} → ${it.current}\nActor ${it.actorUid.take(12)} · ${java.util.Date(it.at)}") }
-    }},confirmButton={TextButton(onClick=vm::closeHistory){Text("Cerrar")}}) }
-    if(summary){var text by remember(state.narrative.text){mutableStateOf(state.narrative.text)}
+    state.history?.let {entries->AlertDialog(onDismissRequest=vm::closeHistory,title={Text("Historial del evento")},text={Column(Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        entries.forEach {Text("${it.previous} → ${it.current}\nActor ${it.actorUid.take(12)} · ${java.util.Date(it.at)}")}
+    }},confirmButton={TextButton(onClick=vm::closeHistory){Text("Cerrar")}})}
+    if(summary) {
+        var text by remember(state.narrative.text){mutableStateOf(state.narrative.text)}
         val current=state.narrative.sourceVersion==match?.eventVersion&&state.narrative.sourceHash==MatchFacts.hash(state.feed.events)
-        AlertDialog(onDismissRequest={summary=false},title={Text("Revisión del entrenador")},text={Column(Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState())) {
-            Text("La IA sólo recibe los eventos registrados. Verifica hechos, omisiones y lenguaje antes de aprobar.")
+        AlertDialog(onDismissRequest={summary=false},title={Text("Revisión del entrenador")},text={Column(Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Text("La IA recibe sólo eventos registrados. Revisa hechos, omisiones y lenguaje antes de aprobar.")
             Button(onClick=vm::generate,enabled=!state.busy&&!state.feed.cached&&!state.feed.pending){Text("Generar borrador IA")}
-            OutlinedTextField(value=text,onValueChange={text=it},label={Text("Borrador editable")},modifier=Modifier.fillMaxWidth(),minLines=4)
-            if(!current&&text.isNotBlank())Text("Los eventos cambiaron: genera otra versión antes de aprobar.")
-            state.error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+            OutlinedTextField(text,{text=it},label={Text("Borrador editable")},modifier=Modifier.fillMaxWidth(),minLines=4)
+            if(!current&&text.isNotBlank())MessageNotice("El partido cambió. Genera otra versión antes de aprobar.")
+            state.error?.let {MessageNotice(it,true)}
             if(state.busy)CircularProgressIndicator()
-        }},confirmButton={TextButton(onClick={vm.saveNarrative(text,true)},enabled=current&&text.isNotBlank()&&!state.busy){Text("Aprobar")}},dismissButton={Row {
+        }},confirmButton={TextButton(onClick={vm.saveNarrative(text,true)},enabled=current&&text.isNotBlank()&&!state.busy){Text("Aprobar")}},dismissButton={Column {
             TextButton(onClick={vm.saveNarrative(text,false)},enabled=text.isNotBlank()&&!state.busy){Text("Guardar revisión")}
             TextButton(onClick={summary=false}){Text("Cerrar")}
         }})
     }
 }
+
+@Composable
+fun MatchBroadcastHeader(match:LiveMatch,events:List<MatchEvent>) {
+    val score=MatchFacts.score(match,events)
+    SportHero(when(match.status){"in_progress"->"EN VIVO";"finished"->"PARTIDO FINALIZADO";else->"PRÓXIMO ENCUENTRO"},match.name,"Marcador de eventos vigentes") {
+        Column(Modifier.fillMaxWidth().padding(vertical=12.dp).semantics(mergeDescendants=true) {
+            contentDescription="Marcador: equipo A ${score.first}, equipo B ${score.second}";liveRegion=LiveRegionMode.Polite
+        },horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                Text("EQUIPO A",style=MaterialTheme.typography.labelLarge,color=Color.White)
+                Text("EQUIPO B",style=MaterialTheme.typography.labelLarge,color=Color.White)
+            }
+            AnimatedContent(targetState=score,label="marcador") {value->Text("${value.first} : ${value.second}",style=MaterialTheme.typography.displayLarge,color=Color.White)}
+        }
+        Text("Los eventos anulados no suman",style=MaterialTheme.typography.bodySmall,color=Color.White)
+    }
+}
+
+@Composable
+fun MatchTimelineCard(event:MatchEvent,teamA:String,staff:Boolean=false,canEdit:Boolean=false,onHistory:()->Unit={},onEdit:()->Unit={}) {
+    val name=event.typeLabel.lowercase()
+    val icon=when {event.voided->Icons.Default.Close;event.countsGoal->Icons.Default.Star;name.contains("tarjeta")->Icons.Default.Warning;name.contains("cambio")->Icons.Default.Refresh;else->Icons.Default.Info}
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.width(52.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.primaryContainer) {Icon(icon,null,Modifier.padding(14.dp).size(24.dp),tint=MaterialTheme.colorScheme.onPrimaryContainer)}
+            Text(event.minute?.let {"$it′"} ?: "s/m",style=MaterialTheme.typography.titleMedium,modifier=Modifier.semantics {contentDescription=event.minute?.let {"Minuto $it"} ?: "Minuto desconocido"})
+        }
+        ElevatedCard(Modifier.weight(1f).animateContentSize(),elevation=CardDefaults.elevatedCardElevation(defaultElevation=2.dp)) {Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text(event.typeLabel,style=MaterialTheme.typography.titleMedium)
+            if(event.voided)StatusBadge("Anulado · conservado",BadgeTone.Danger)
+            Text("Equipo ${if(event.teamId==teamA)"A" else "B"} · ${event.player.ifBlank {"Jugador desconocido"}}",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(event.note.isNotBlank())Text(event.note)
+            Text("Revisión ${event.revision} · ${event.updatedBy.take(8)}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick=onHistory,modifier=Modifier.heightIn(min=48.dp)){Text("Ver historial")}
+            if(staff)OutlinedButton(onClick=onEdit,enabled=canEdit,modifier=Modifier.heightIn(min=48.dp)){Icon(Icons.Default.Edit,null);Spacer(Modifier.width(6.dp));Text("Corregir / anular")}
+        }}
+    }
+}
+
+@Preview(showBackground=true,widthDp=390)
+@Composable private fun ScorePreview() {SportProTheme {MatchBroadcastHeader(LiveMatch(name="Jornada de práctica",teamA="a",teamB="b",status="in_progress"),listOf(MatchEvent(id="g",teamId="a",countsGoal=true)))}}
 
 @Composable
 private fun EventEditor(match:LiveMatch,types:List<EventType>,old:MatchEvent?,onDismiss:()->Unit,

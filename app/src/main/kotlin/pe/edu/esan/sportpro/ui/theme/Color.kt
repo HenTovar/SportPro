@@ -1,79 +1,37 @@
 package pe.edu.esan.sportpro.ui.theme
 
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 
-// Paleta de colores verde de fútbol
-val PrimaryGreen = Color(0xFF1B5E20)
-val PrimaryGreenLight = Color(0xFF2E7D32)
-val PrimaryGreenDark = Color(0xFF0D3B1A)
-val SecondaryGreen = Color(0xFF4CAF50)
-val TertiaryGreen = Color(0xFF81C784)
-val AccentWhite = Color(0xFFFFFFFF)
-val BackgroundLight = Color(0xFFF5F5F5)
-val BackgroundDark = Color(0xFF121212)
-val ErrorRed = Color(0xFFB3261E)
-val SurfaceLight = Color(0xFFFAFAFA)
-val SurfaceDark = Color(0xFF1F1F1F)
-
-/**
- * Esquema de colores claro para SportPro.
- * Basado en una paleta verde de fútbol.
- */
+// Brand colors are local constants: no downloaded fonts, imagery or UI libraries.
+val HeroStart = Color(0xFF083D2C)
+val HeroEnd = Color(0xFF0B2630)
 val LightColorScheme = lightColorScheme(
-    primary = PrimaryGreen,
-    onPrimary = AccentWhite,
-    primaryContainer = TertiaryGreen,
-    onPrimaryContainer = PrimaryGreenDark,
-    secondary = SecondaryGreen,
-    onSecondary = AccentWhite,
-    secondaryContainer = TertiaryGreen,
-    onSecondaryContainer = PrimaryGreenDark,
-    tertiary = TertiaryGreen,
-    onTertiary = PrimaryGreenDark,
-    tertiaryContainer = TertiaryGreen,
-    onTertiaryContainer = PrimaryGreenDark,
-    error = ErrorRed,
-    onError = AccentWhite,
-    errorContainer = Color(0xFFF9DEDC),
-    onErrorContainer = ErrorRed,
-    background = BackgroundLight,
-    onBackground = Color(0xFF1C1C1C),
-    surface = SurfaceLight,
-    onSurface = Color(0xFF1C1C1C),
-    surfaceVariant = Color(0xFFE0E0E0),
-    onSurfaceVariant = Color(0xFF49454E),
-    outline = Color(0xFF79747E),
+    primary = Color(0xFF086342), onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFD7F3E3), onPrimaryContainer = Color(0xFF092D1D),
+    secondary = Color(0xFF234E5C), onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFD9EEF4), onSecondaryContainer = Color(0xFF102D37),
+    tertiary = Color(0xFF765A12), onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFF9E9B5), onTertiaryContainer = Color(0xFF352800),
+    background = Color(0xFFF3F7F4), onBackground = Color(0xFF14251C),
+    surface = Color(0xFFFFFFFF), onSurface = Color(0xFF14251C),
+    surfaceVariant = Color(0xFFE5EDE7), onSurfaceVariant = Color(0xFF405449),
+    outline = Color(0xFF64796B),
+    error = Color(0xFFB3261E), onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFF9DEDC), onErrorContainer = Color(0xFF410E0B)
 )
-
-/**
- * Esquema de colores oscuro para SportPro.
- * Basado en una paleta verde de fútbol.
- */
 val DarkColorScheme = darkColorScheme(
-    primary = TertiaryGreen,
-    onPrimary = PrimaryGreenDark,
-    primaryContainer = PrimaryGreenLight,
-    onPrimaryContainer = AccentWhite,
-    secondary = SecondaryGreen,
-    onSecondary = PrimaryGreenDark,
-    secondaryContainer = PrimaryGreenLight,
-    onSecondaryContainer = AccentWhite,
-    tertiary = TertiaryGreen,
-    onTertiary = PrimaryGreenDark,
-    tertiaryContainer = PrimaryGreenLight,
-    onTertiaryContainer = AccentWhite,
-    error = Color(0xFFF2B8B5),
-    onError = ErrorRed,
-    errorContainer = Color(0xFF8C1D18),
-    onErrorContainer = Color(0xFFF2B8B5),
-    background = BackgroundDark,
-    onBackground = Color(0xFFE6E1E6),
-    surface = SurfaceDark,
-    onSurface = Color(0xFFE6E1E6),
-    surfaceVariant = Color(0xFF49454E),
-    onSurfaceVariant = Color(0xFFCAC7D0),
-    outline = Color(0xFF938F99),
+    primary = Color(0xFF8AE2B5), onPrimary = Color(0xFF062F1C),
+    primaryContainer = Color(0xFF174B32), onPrimaryContainer = Color(0xFFCEF5DE),
+    secondary = Color(0xFFA1D0E0), onSecondary = Color(0xFF073541),
+    secondaryContainer = Color(0xFF234E5C), onSecondaryContainer = Color(0xFFD9EEF4),
+    tertiary = Color(0xFFE4C66C), onTertiary = Color(0xFF3D2F00),
+    tertiaryContainer = Color(0xFF58440B), onTertiaryContainer = Color(0xFFF9E9B5),
+    background = Color(0xFF0B1511), onBackground = Color(0xFFE5EEE8),
+    surface = Color(0xFF112019), onSurface = Color(0xFFE5EEE8),
+    surfaceVariant = Color(0xFF24382C), onSurfaceVariant = Color(0xFFBED0C3),
+    outline = Color(0xFF8DA294),
+    error = Color(0xFFF2B8B5), onError = Color(0xFF601410),
+    errorContainer = Color(0xFF8C1D18), onErrorContainer = Color(0xFFFFDAD6)
 )

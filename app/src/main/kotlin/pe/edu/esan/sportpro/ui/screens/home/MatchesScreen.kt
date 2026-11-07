@@ -8,6 +8,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import pe.edu.esan.sportpro.ui.common.*
 import androidx.navigation.NavHostController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -41,16 +44,19 @@ fun MatchesScreen(teamId:String,navController:NavHostController) {
             else -> Unit
         }}
     }
-    Scaffold(topBar={TopAppBar(title={Text("Partidos del equipo")},navigationIcon={TextButton(onClick={navController.safeBack()}){Text("Volver")}})}) { padding ->
+    Scaffold(topBar={TopAppBar(title={Text("Partidos del equipo")},navigationIcon={BackButton {navController.safeBack()}})}) { padding ->
         Column(Modifier.padding(padding).padding(16.dp)) {
-            if(staff)Button(onClick={create=true}){Text("Crear partido")}
+            SportHero("EL FÚTBOL SE VIVE AQUÍ","Día de partido","Sigue cada jugada. Comparte cada momento.")
+            Spacer(Modifier.height(16.dp))
+            if(staff)Button(onClick={create=true},modifier=Modifier.heightIn(min=48.dp)){Text("Crear partido")}
+            Spacer(Modifier.height(12.dp))
             if(loading)CircularProgressIndicator()
-            error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
-            if(!loading&&error==null&&rows.isEmpty())Text("No hay partidos. El entrenador puede crear el primero.")
-            LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp)) {items(rows,key={it.id}) {row->Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(16.dp)) {
+            error?.let {MessageNotice(it,true)}
+            if(!loading&&error==null&&rows.isEmpty())EmptyState(Icons.Default.PlayArrow,"Tu próximo encuentro está por llegar","El entrenador puede crear el primer partido con un rival registrado.")
+            LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp)) {items(rows,key={it.id}) {row->ElevatedCard(Modifier.fillMaxWidth(),elevation=CardDefaults.elevatedCardElevation(defaultElevation=2.dp)) {Column(Modifier.padding(16.dp)) {
                 Text(row.name,style=MaterialTheme.typography.titleMedium)
                 Text(if(row.date>0)SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault()).format(Date(row.date)) else "Fecha pendiente")
-                Text(when(row.status){"finished"->"Finalizado";"in_progress"->"En curso";else->"Programado"})
+                StatusBadge(when(row.status){"finished"->"Finalizado";"in_progress"->"En curso";else->"Programado"},if(row.status=="in_progress")BadgeTone.Positive else BadgeTone.Neutral)
                 Button(onClick={navController.navigate("liveMatch/${Uri.encode(row.id)}")}){Text("Abrir en vivo")}
             }}}}
         }
@@ -61,7 +67,7 @@ fun MatchesScreen(teamId:String,navController:NavHostController) {
         if(teams.isEmpty())Text("Registra otro equipo antes de crear un partido.")
         teams.forEach {t->Row {RadioButton(opponent==t.id,{opponent=t.id});Text(t.name)}}
         if(saving)CircularProgressIndicator()
-        error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+        error?.let {MessageNotice(it,true)}
     }},confirmButton={TextButton(onClick={scope.launch {
         saving=true
         try {repo.create(teamId,opponent,name);create=false;name="";opponent="";error=null}

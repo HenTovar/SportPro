@@ -8,6 +8,12 @@ SportPro es una aplicación Android para la gestión integral de equipos y acade
 
 Ver [ENTREGA.md](ENTREGA.md) para alcance y límites, [guía de demo](docs/SEMANA12_DEMO.md) y [pruebas](docs/SEMANA12_PRUEBAS.md). El video de partido real y la aceptación en dos teléfonos están pendientes; no se declara un porcentaje aceptado sin esa evidencia.
 
+## Actualización visual y publicación de reglas
+
+- [Rediseño y accesibilidad](docs/REDISENO_UI.md): Material 3 claro/oscuro, home por rol, marcador y comunidad.
+- [Publicar reglas con respaldo y smoke real](docs/PUBLICAR_REGLAS_FIRESTORE.md): procedimiento para el propietario porque la máquina de construcción no tiene sesión Firebase. No se ha publicado desde aquí.
+- `firebase.json` contiene sólo Firestore; el despliegue siempre lleva `--only firestore:rules --project sportpro-df6e0`.
+
 ## Requisitos Previos
 
 - **Android Studio** (versión 2024.1 o más reciente)

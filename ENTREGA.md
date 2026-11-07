@@ -2,6 +2,12 @@
 
 Base de trabajo: `b4712be`; rama `feat/semana12`. Propuesta para revisión en un Pull Request a `main`, sin merge ni despliegue de reglas.
 
+## Incremento visual y reglas
+
+El mismo PR añade el rediseño Compose/Material 3 de `docs/REDISENO_UI.md`, sin bibliotecas nuevas. Las reglas candidatas no cambiaron. No hay cuenta autenticada en Firebase CLI en la máquina de construcción: **se entrega el fallback para Henry**, con respaldo previo, publicación exclusivamente Firestore y comprobación de una lectura real permitida/otra denegada en `docs/PUBLICAR_REGLAS_FIRESTORE.md`. No se presenta como despliegue remoto ejecutado.
+
+Las capturas Android antes/después siguen pendientes de un dispositivo/AVD accesible; se conservan ambos APK y Previews con datos ficticios. No se fabricaron capturas. Ver límites y pruebas en el documento del rediseño.
+
 ## Qué se añadió
 
 - Partidos: crear entre dos equipos registrados, iniciar/finalizar, catálogo editable de tipos, registro con minuto/equipo/jugador/observación y marcador calculado desde eventos vigentes. El minuto y jugador pueden quedar desconocidos. La cronología ordena por minuto, aunque el registro llegue tarde.

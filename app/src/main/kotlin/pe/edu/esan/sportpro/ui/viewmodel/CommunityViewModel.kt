@@ -9,7 +9,7 @@ import kotlinx.coroutines.launch
 import pe.edu.esan.sportpro.data.model.*
 import pe.edu.esan.sportpro.data.repository.*
 
-data class CommunityUiState(val profile: User? = null,val posts: List<CommunityPost> = emptyList(),
+data class CommunityUiState(val loading:Boolean=true,val profile: User? = null,val posts: List<CommunityPost> = emptyList(),
     val thread: CommunityThread=CommunityThread(),val selected: CommunityPost?=null,
     val error: String?=null,val reports: List<CommunityReport>?=null)
 class CommunityViewModel(private val team: String,private val repo: CommunityRepository,private val auth: AuthRepository):ViewModel() {
@@ -20,13 +20,13 @@ class CommunityViewModel(private val team: String,private val repo: CommunityRep
         _state.update { it.copy(profile=profile.data) }
         repo.watch(team,RolePolicy.isStaff(profile.data.role)).collect { r -> when(r) {
             is Result.Success -> _state.update { current ->
-                current.copy(posts=r.data,selected=current.selected?.let { selected -> r.data.find { it.id==selected.id } })
+                current.copy(loading=false,posts=r.data,selected=current.selected?.let { selected -> r.data.find { it.id==selected.id } })
             }
             is Result.Error -> error(r.message)
             else -> Unit
         } }
     } }
-    private fun error(message:String) { _state.update { it.copy(error=message) } }
+    private fun error(message:String) { _state.update { it.copy(error=message,loading=false) } }
     fun clearError() { _state.update { it.copy(error=null) } }
     private fun action(work:suspend ()->Unit)=viewModelScope.launch {
         try { require(_state.value.profile!=null) { "Inicia sesión" };work() }

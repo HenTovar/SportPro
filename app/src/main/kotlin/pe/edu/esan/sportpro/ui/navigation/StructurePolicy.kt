@@ -6,6 +6,7 @@ import pe.edu.esan.sportpro.data.model.*
 
 /** Presentation-only routing and filtering. Never grants a server permission. */
 object StructurePolicy {
+    fun bottomBarVisible(protectedDestination: Boolean, keyboardOpen: Boolean) = protectedDestination && !keyboardOpen
     fun navigationLabel(destination: String) = if (destination == "Comunidad") "Muro" else destination
     fun isPrimaryDestination(route: String) = route.substringBefore('?').substringBefore('/') in
         setOf("home", "profile", "teams", "team", "matches", "community")

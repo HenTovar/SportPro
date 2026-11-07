@@ -84,6 +84,7 @@ class PhoneChromeLayoutTest {
         }
         // Root applies 24; nested app bar must consume it instead of adding another 24.
         val body=rule.onNodeWithTag("body").fetchSemanticsNode().boundsInRoot
-        assertEquals(24f+64f,body.top,1.1f)
+        val window=rule.onNodeWithTag("app_window").fetchSemanticsNode().boundsInRoot
+        assertEquals(24f+64f,body.top-window.top,1.1f)
     }
 }

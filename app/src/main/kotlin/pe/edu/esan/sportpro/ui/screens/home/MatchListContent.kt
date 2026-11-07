@@ -41,8 +41,8 @@ fun MatchListContent(rows: List<LiveMatch>, loading: Boolean, error: String?, st
     LazyColumn(modifier.fillMaxSize().testTag("match_list"), contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (!embedded) item(key = "hero") { SportHero("EL FÚTBOL SE VIVE AQUÍ", "Día de partido", "Sigue cada jugada. Comparte cada momento.") }
-        if (staff) item(key = "create") { Button(onClick = onCreate, modifier = Modifier.heightIn(min = 48.dp)) { Text("Crear partido") } }
-        item(key = "search") { OutlinedTextField(query, onQuery, label = { Text("Buscar partido") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+        if (staff) item(key = "create") { Button(onClick = onCreate, modifier = Modifier.heightIn(min = 48.dp).testTag("create_match")) { Text("Crear partido") } }
+        item(key = "search") { MatchSearchField(query, onQuery) }
         item(key = "filters") { MatchStatusFilters(status, onStatus) }
         if (loading) item(key = "loading") { CircularProgressIndicator() }
         error?.let { item(key = "error") { MessageNotice(it, true) } }

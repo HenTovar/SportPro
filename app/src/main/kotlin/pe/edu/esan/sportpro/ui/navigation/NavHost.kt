@@ -43,12 +43,10 @@ fun SportProNavHost(
         }
     }
     CompositionLocalProvider(LocalTeamSession provides session) {
-        Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), bottomBar = {
-            if (protected) MainNavigationBar(navController, route)
-        }) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-                AppDestinations(startDestination, navController)
-            }
+        AppContentFrame(showNavigation = protected, bottomBar = {
+            MainNavigationBar(navController, route)
+        }) {
+            AppDestinations(startDestination, navController)
         }
     }
 }

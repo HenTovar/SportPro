@@ -3,6 +3,10 @@
 package pe.edu.esan.sportpro.ui.screens.teams
 
 import pe.edu.esan.sportpro.ui.navigation.safeBack
+import pe.edu.esan.sportpro.ui.navigation.LocalTeamSession
+import pe.edu.esan.sportpro.data.repository.TeamRepository
+import pe.edu.esan.sportpro.data.repository.Result
+import kotlinx.coroutines.flow.first
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -32,6 +36,7 @@ fun CreateTeamScreen(navController: NavHostController, teamId: String? = null) {
     var formReady by remember(teamId) { mutableStateOf(false) }
     var checkingAccess by remember(teamId) { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
+    val session = LocalTeamSession.current
     val firestore = FirebaseFirestore.getInstance()
 
     LaunchedEffect(teamId) {
@@ -127,18 +132,16 @@ fun CreateTeamScreen(navController: NavHostController, teamId: String? = null) {
                         try {
                             val uid = requireStaff(firestore)
                             val collection = firestore.collection("teams")
-                            val document = teamId?.let(collection::document) ?: collection.document()
+                            val document = teamId?.let(collection::document)
                             if (teamId == null) {
-                                document.set(Team(
-                                    id = document.id,
-                                    name = name.trim(),
-                                    category = category,
-                                    ownerId = uid,
-                                    createdAt = System.currentTimeMillis()
-                                )).await()
+                                val result = TeamRepository(firestore).createTeam(Team(
+                                    name=name.trim(), category=category, ownerId=uid
+                                )).first { it !is Result.Loading }
+                                check(result is Result.Success) { (result as? Result.Error)?.message ?: "No se confirmó la creación" }
+                                session.refresh()
                             } else {
-                                document.update(mapOf(
-                                    "id" to document.id,
+                                checkNotNull(document).update(mapOf(
+                                    "id" to checkNotNull(document).id,
                                     "name" to name.trim(),
                                     "category" to category.name,
                                     "updatedAt" to System.currentTimeMillis()

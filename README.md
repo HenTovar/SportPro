@@ -209,3 +209,7 @@ Actualización Semana 12: **6 de Noviembre de 2026**
 ## Licencia
 
 Este proyecto es académico y es propiedad de los estudiantes de ESAN.
+
+## Uso académico de la demostración 1.3.0
+
+Resumen generado con IA: **sólo datos de prueba**. Esta entrega es para una demostración académica privada entre adultos y su profesor, sin despliegue público. Confirmar en la pantalla que los eventos son ficticios antes de solicitar IA. Los nombres nunca se envían: se usan alias y se restauran sólo en el teléfono. Si no hay red/atestación/cuota, se usa plantilla y revisión explícita. **No publicar con IA remota si la app llega a menores reales.** No introducir datos personales, sensibles ni confidenciales. La confirmación no verifica por sí sola que los datos sean ficticios. No hay clave Gemini en el repo/APK/chat. Véanse docs/APP_CHECK_DEBUG.md y docs/IA_POLITICA_PENDIENTE.md; release no habilita IA sin atestación de producción.

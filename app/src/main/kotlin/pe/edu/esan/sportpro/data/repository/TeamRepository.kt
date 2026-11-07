@@ -1,6 +1,8 @@
 package pe.edu.esan.sportpro.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
+import pe.edu.esan.sportpro.data.model.UserRole
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
@@ -71,13 +73,31 @@ class TeamRepository(
     fun createTeam(team: Team): Flow<Result<Team>> = flow {
         try {
             emit(Result.Loading())
-            val newTeamId = firestore.collection("teams").document().id
-            val newTeam = team.copy(
-                id = newTeamId,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            )
-            firestore.collection("teams").document(newTeamId).set(newTeam).await()
+            val actor = checkNotNull(currentProfile()) { "Inicia sesión" }
+            check(actor.isActive && actor.role in setOf(UserRole.ADMIN, UserRole.ENTRENADOR)) { "Requiere personal activo" }
+            require(team.name.trim().length in 1..120 && team.description.length <= 2000) { "Revisa el nombre y la descripción" }
+            val randomId = firestore.collection("teams").document().id
+            val newTeamId = if (actor.role == UserRole.ENTRENADOR) "coach_${actor.uid}_$randomId" else randomId
+            val now = System.currentTimeMillis()
+            val newTeam = team.copy(id=newTeamId, name=team.name.trim(), ownerId=actor.uid, createdAt=now, updatedAt=now, isActive=true)
+            val reference = firestore.collection("teams").document(newTeamId)
+            if (actor.role == UserRole.ADMIN) reference.set(newTeam).await()
+            else firestore.runTransaction { transaction ->
+                val accountRef = firestore.collection("users").document(actor.uid)
+                val account = transaction.get(accountRef)
+                check(account.getString("role") == "ENTRENADOR" && account.getBoolean("active") != false) { "Requiere entrenador activo" }
+                val raw = account.get("coachTeamIds")
+                check(raw is List<*>) { "Un administrador debe confirmar primero tus equipos en Perfil" }
+                check(raw.all { it is String } && raw.size < 20) { "Límite de 20 equipos; consulta al administrador" }
+                val ids = raw.filterIsInstance<String>()
+                transaction.set(reference, mapOf("id" to newTeamId, "name" to newTeam.name,
+                    "category" to newTeam.category.name, "description" to newTeam.description,
+                    "ownerId" to actor.uid, "createdAt" to now, "updatedAt" to now,
+                    "active" to true, "coachCreated" to true))
+                transaction.update(accountRef, mapOf("coachTeamIds" to ids + newTeamId,
+                    "lastCreatedTeamId" to newTeamId, "coachScopeBy" to actor.uid,
+                    "coachScopeAt" to FieldValue.serverTimestamp()))
+            }.await()
             emit(Result.Success(newTeam))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -92,7 +112,11 @@ class TeamRepository(
         try {
             emit(Result.Loading())
             val updatedTeam = team.copy(updatedAt = System.currentTimeMillis())
-            firestore.collection("teams").document(team.id).set(updatedTeam).await()
+            // Preserve creation seals and future server-owned fields when editing metadata.
+            firestore.collection("teams").document(team.id).update(mapOf(
+                "name" to updatedTeam.name, "category" to updatedTeam.category.name,
+                "description" to updatedTeam.description, "active" to updatedTeam.isActive,
+                "updatedAt" to updatedTeam.updatedAt)).await()
             emit(Result.Success(updatedTeam))
         } catch (e: Exception) {
             if (e is CancellationException) throw e

@@ -1,5 +1,3 @@
-# Copiar a local.properties, que NO se versiona. No completar aquí ninguna clave.
+# Sólo ruta local de Android SDK. Firebase se configura en su consola.
+# No agregar claves de Gemini ni proveedores externos.
 sdk.dir=/ruta/local/al/Android/Sdk
-SUMMARY_BASE_URL=
-SUMMARY_API_KEY=
-SUMMARY_MODEL=

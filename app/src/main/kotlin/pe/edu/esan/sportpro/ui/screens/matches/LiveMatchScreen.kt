@@ -41,6 +41,7 @@ fun LiveMatchScreen(id:String,nav:NavHostController,openEvent:Boolean=false) {
     val state by vm.state.collectAsState();val match=state.feed.match
     var editor by remember {mutableStateOf(false)};var editing by remember {mutableStateOf<MatchEvent?>(null)}
     var catalog by remember {mutableStateOf(false)};var summary by remember {mutableStateOf(false)}
+    var academicTestData by remember { mutableStateOf(false) }
     val staff=RolePolicy.isStaff(state.profile?.role)
     var openedFromShortcut by rememberSaveable(id) {mutableStateOf(false)}
     LaunchedEffect(openEvent,staff,match?.id,state.feed.types) {
@@ -68,7 +69,7 @@ fun LiveMatchScreen(id:String,nav:NavHostController,openEvent:Boolean=false) {
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                         TextButton(onClick={vm.setStatus("in_progress")},enabled=!state.busy,modifier=Modifier.heightIn(min=48.dp)){Text("Iniciar")}
                         TextButton(onClick={vm.setStatus("finished")},enabled=!state.busy,modifier=Modifier.heightIn(min=48.dp)){Text("Finalizar")}
-                        TextButton(onClick={summary=true},modifier=Modifier.heightIn(min=48.dp)){Text("Resumen IA")}
+                        TextButton(onClick={summary=true},modifier=Modifier.heightIn(min=48.dp)){Text("Resumen")}
                     }
                     Text("¿Falta un dato? Puedes dejar minuto o jugador desconocidos. Evita datos privados en las observaciones.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }}
@@ -97,14 +98,20 @@ fun LiveMatchScreen(id:String,nav:NavHostController,openEvent:Boolean=false) {
         var text by remember(state.narrative.text){mutableStateOf(state.narrative.text)}
         val current=state.narrative.sourceVersion==match?.eventVersion&&state.narrative.sourceHash==MatchFacts.hash(state.feed.events)
         AlertDialog(onDismissRequest={summary=false},title={Text("Revisión del entrenador")},text={Column(Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text("La IA recibe sólo eventos registrados. Revisa hechos, omisiones y lenguaje antes de aprobar.")
-            Button(onClick=vm::generate,enabled=!state.busy&&!state.feed.cached&&!state.feed.pending){Text("Generar borrador IA")}
+            Text("La IA recibe tipos, minutos, equipos anónimos y alias; los nombres se reponen aquí. Sin IA se usa una plantilla. Revisa antes de aprobar.")
+            state.generationNotice?.let { MessageNotice(it) }
+            Text("Resumen generado con IA: sólo datos de prueba",style=MaterialTheme.typography.labelLarge)
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Checkbox(checked=academicTestData,enabled=!state.busy,onCheckedChange={academicTestData=it})
+                Text("Confirmo que son datos ficticios para uso académico",modifier=Modifier.weight(1f))
+            }
+            Button(onClick={val confirmed=academicTestData;academicTestData=false;vm.generate(testDataConfirmed=confirmed)},enabled=!state.busy){Text(if(academicTestData) "Generar IA o plantilla" else "Generar plantilla local")}
             OutlinedTextField(text,{text=it},label={Text("Borrador editable")},modifier=Modifier.fillMaxWidth(),minLines=4)
             if(!current&&text.isNotBlank())MessageNotice("El partido cambió. Genera otra versión antes de aprobar.")
             state.error?.let {MessageNotice(it,true)}
             if(state.busy)CircularProgressIndicator()
-        }},confirmButton={TextButton(onClick={vm.saveNarrative(text,true)},enabled=current&&text.isNotBlank()&&!state.busy){Text("Aprobar")}},dismissButton={Column {
-            TextButton(onClick={vm.saveNarrative(text,false)},enabled=text.isNotBlank()&&!state.busy){Text("Guardar revisión")}
+        }},confirmButton={TextButton(onClick={vm.saveNarrative(text,true)},enabled=current&&state.canPersistNarrative&&text.isNotBlank()&&!state.busy){Text("Aprobar")}},dismissButton={Column {
+            TextButton(onClick={vm.saveNarrative(text,false)},enabled=state.canPersistNarrative&&text.isNotBlank()&&!state.busy){Text("Guardar revisión")}
             TextButton(onClick={summary=false}){Text("Cerrar")}
         }})
     }

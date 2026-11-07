@@ -40,11 +40,6 @@ object MatchFacts {
         }
         return MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
     }
-    fun aiFacts(match: LiveMatch, events: List<MatchEvent>): String {
-        val score = score(match,events)
-        return "Estado: ${match.status}; marcador registrado ${score.first}-${score.second}.\n" +
-            timeline(events).filterNot { it.voided }.joinToString("\n") {
-                "Evento ${it.id}: minuto ${it.minute?.toString() ?: "desconocido"}; ${it.typeLabel}; equipo ${if(it.teamId==match.teamA) "A" else "B"}; jugador ${it.player.ifBlank { "desconocido" }}; observación: ${it.note}"
-            }
-    }
+    fun aiFacts(match: LiveMatch, events: List<MatchEvent>): String =
+        pe.edu.esan.sportpro.data.network.AnonymousNarrative.prepare(match,events).prompt
 }

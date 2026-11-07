@@ -31,13 +31,13 @@ APK generado en `app/build/outputs/apk/debug/app-debug.apk`. En Windows usar `gr
 
 El archivo Firebase local estaba versionado en la base pese al `.gitignore`. Se retira del índice sin borrarlo de la copia local. Su contenido histórico ya existente en Git no se elimina ni se afirma revocado. El ejemplo anterior era de cuenta de servicio: se reemplazó por una plantilla Android sin credencial privada. Nunca colocar una clave privada de Admin SDK en la app.
 
-## Configuración IA (pendiente de elegir proveedor)
+## Configuración IA — demostración académica privada
 
-Copiar los campos de `local.properties.example` al archivo local y completar `SUMMARY_BASE_URL`, `SUMMARY_API_KEY` y `SUMMARY_MODEL`. Contrato compatible con `POST chat/completions`, mensajes system/user y respuesta `choices[0].message.content`, vía HTTPS. No hay proveedor, modelo ni clave por defecto. Sin configuración la pantalla lo informa y no inventa un resumen.
+Resumen con Firebase AI Logic (Gemini Developer API) exclusivamente para datos ficticios de una demostración académica privada de adultos, con anonimización y respaldo por plantilla. No publicar con IA remota si la app llega a menores reales. No se configuran claves de Gemini en el cliente. Ver docs/RESUMEN_IA.md y docs/APP_CHECK_DEBUG.md.
 
-La clave queda fuera de Git, siguiendo el patrón de clase. **BuildConfig no oculta una clave dentro de un APK distribuido**: para una publicación real se necesita un servicio propio que custodie la clave. No compartir un APK con una clave de producción. La solicitud puede tener costo según el proveedor; no se realizó ninguna llamada facturable.
+La clave de Gemini la administra Firebase; el cliente no la recibe. La configuración pública Firebase de la app no es esa clave secreta. El proyecto Spark y las cuotas del proveedor determinan disponibilidad; ante rechazo se usa plantilla. No se realizó llamada real al proveedor desde la construcción.
 
-La prueba Retrofit usa un receptor HTTP local simulado y texto ficticio. Demuestra serialización/respuesta, no calidad factual de un modelo. La instrucción al modelo no garantiza ausencia de errores: la revisión y aprobación del entrenador son obligatorias.
+Las pruebas usan un doble de proveedor y texto ficticio: capturan el UTF-8 lógico del prompt y comprueban que no salen nombres ni otros campos privados. No prueban una llamada real ni la calidad factual de un modelo. La revisión y aprobación explícita siguen siendo obligatorias. Sin confirmación de datos ficticios o sin atestación válida se usa plantilla; release no llama al proveedor sin atestación de producción.
 
 ## Correcciones de construcción heredadas
 

@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// SportPro: ADMIN assigns coaches; scoped staff operate their teams. No self-assignment.
+// ADMIN assigns scopes; a coach may append only a team created atomically by that same coach.
 service cloud.firestore {
   match /databases/{database}/documents {
     function profile() {
@@ -28,6 +28,33 @@ service cloud.firestore {
           teamId in account.get('coachTeamIds', [])
           || (!account.keys().hasAny(['coachTeamIds']) && (account.get('teamId', '') == teamId
             || get(/databases/$(database)/documents/teams/$(teamId)).data.get('ownerId', '') == request.auth.uid)))));
+    }
+    // Exact prefix comparison, never a regex containing a caller-controlled UID.
+    // Namespaced IDs cannot claim legacy 20-character auto-ID teams.
+    function ownNewTeamId(teamId, uid) {
+      let prefix = 'coach_' + uid + '_';
+      return teamId is string && teamId.size() == prefix.size() + 20
+        && teamId[0:prefix.size()] == prefix
+        && teamId[prefix.size():teamId.size()].matches('[A-Za-z0-9]{20}');
+    }
+    function coachCreatesTeam(uid, teamId) {
+      let before = get(/databases/$(database)/documents/users/$(uid)).data;
+      let after = getAfter(/databases/$(database)/documents/users/$(uid)).data;
+      let old = before.get('coachTeamIds', null);
+      let team = getAfter(/databases/$(database)/documents/teams/$(teamId)).data;
+      return signedIn() && request.auth.uid == uid && before.role == 'ENTRENADOR'
+        && before.get('active', before.get('isActive', false)) == true
+        && old is list && old.size() < 20 && !(teamId in old)
+        && ownNewTeamId(teamId, uid) && !exists(/databases/$(database)/documents/teams/$(teamId))
+        && after.diff(before).affectedKeys().hasOnly(['coachTeamIds','lastCreatedTeamId','coachScopeBy','coachScopeAt'])
+        && after.coachTeamIds == old.concat([teamId]) && after.lastCreatedTeamId == teamId
+        && after.coachScopeBy == uid && after.coachScopeAt == request.time
+        && team.ownerId == uid && team.id == teamId && team.coachCreated == true
+        && team.keys().hasOnly(['id','name','category','description','ownerId','createdAt','updatedAt','active','coachCreated'])
+        && team.name is string && team.name.size() > 0 && team.name.size() <= 120
+        && team.get('description','') is string && team.get('description','').size() <= 2000
+        && team.category in ['SUB_10','SUB_12','SUB_15','SUB_17','PRIMERA','SENIOR']
+        && team.active == true && team.createdAt is int && team.updatedAt is int;
     }
     function scopedUser(data) {
       // Coaches never get a whole family profile containing children in other teams.
@@ -203,7 +230,10 @@ service cloud.firestore {
         && request.resource.data.get('active', true) == true
         && request.resource.data.get('isActive', true) == true;
       // La matriz de aprobadores y la limpieza familiar se verifican en la escritura atómica.
-      allow update: if (signedIn() && request.auth.uid != uid
+      allow update: if (signedIn() && request.auth.uid == uid && resource.data.role == 'ENTRENADOR'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coachTeamIds','lastCreatedTeamId','coachScopeBy','coachScopeAt'])
+        && coachCreatesTeam(uid, request.resource.data.get('lastCreatedTeamId','')))
+        || (signedIn() && request.auth.uid != uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'children', 'teamId', 'playerId', 'coachTeamIds'])
         && request.resource.data.get('children', {}) == {} && request.resource.data.get('coachTeamIds', []) == []
         && request.resource.data.get('teamId', '') == '' && request.resource.data.get('playerId', '') == ''
@@ -254,9 +284,13 @@ service cloud.firestore {
     match /teams/{teamId} {
       allow read: if teamStaff(teamId) || assignedTeam(teamId)
         || (coach() && !explicitCoachScope() && resource.data.get('ownerId', '') == request.auth.uid);
-      allow create, delete: if administrator();
-      allow update: if teamStaff(teamId) && (administrator()
-        || request.resource.data.get('ownerId','') == resource.data.get('ownerId',''));
+      allow create: if administrator() || (signedIn() && coachCreatesTeam(request.auth.uid, teamId));
+      // Keep coach-created roots as seals; archival uses active=false, not hard delete.
+      allow delete: if administrator() && resource.data.get('coachCreated',false) != true;
+      allow update: if (request.resource.data.get('coachCreated',null) == resource.data.get('coachCreated',null)
+        && request.resource.data.keys().hasAny(['coachCreated']) == resource.data.keys().hasAny(['coachCreated']))
+        && teamStaff(teamId) && (administrator()
+          || request.resource.data.get('ownerId','') == resource.data.get('ownerId',''));
 
       match /players/{playerId} {
         allow read: if teamStaff(teamId) || assignedPlayer(teamId, playerId);

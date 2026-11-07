@@ -5,13 +5,16 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import pe.edu.esan.sportpro.data.model.*
 import pe.edu.esan.sportpro.data.repository.*
 import pe.edu.esan.sportpro.data.network.NarrativeGenerator
 
 data class LiveMatchUiState(val profile: User? = null,val feed: MatchFeed = MatchFeed(),
     val narrative: Narrative = Narrative(),val busy: Boolean = false,val error: String? = null,
-    val history: List<EventRevision>? = null)
+    val history: List<EventRevision>? = null,val generationNotice:String?=null,val unconfirmedFacts:Boolean=false) {
+    val canPersistNarrative:Boolean get()=!unconfirmedFacts&&!feed.cached&&!feed.pending
+}
 class LiveMatchViewModel(private val id: String,private val repo: MatchRepository,
     private val auth: AuthRepository,private val generator: NarrativeGenerator= NarrativeGenerator()):ViewModel() {
     private val _state=MutableStateFlow(LiveMatchUiState());val state=_state.asStateFlow()
@@ -57,18 +60,27 @@ class LiveMatchViewModel(private val id: String,private val repo: MatchRepositor
         catch(e:Exception) { if(e is CancellationException)throw e;error("No se pudo abrir el historial") }
     }
     fun closeHistory() { _state.update { it.copy(history=null) } }
-    fun generate()=action {
-        require(!_state.value.feed.cached&&!_state.value.feed.pending) { "Conecta y sincroniza el partido antes de pedir el resumen" }
-        val (match,events)=repo.confirmedFacts(id)
-        require(events.any { !it.voided }) { "Registra al menos un evento vigente" }
-        val text=generator.generate(match,events)
-        repo.saveNarrative(id,text,MatchFacts.hash(events),match.eventVersion,false)
+    fun generate(testDataConfirmed:Boolean=false)=action {
+        val snapshot=_state.value.feed
+        var match=requireNotNull(snapshot.match) { "Carga un partido" };var events=snapshot.events
+        var confirmed=false
+        if(!snapshot.cached&&!snapshot.pending) {
+            try { val facts=withTimeoutOrNull(5_000){repo.confirmedFacts(id)}
+                if(facts!=null){match=facts.first;events=facts.second;confirmed=true} }
+            catch(e:CancellationException){throw e}
+            catch(_:Exception){ /* Use local facts without exporting them or pretending they are synchronized. */ }
+        }
+        val result=generator.generate(match,events,allowRemote=pe.edu.esan.sportpro.data.network.AcademicSummaryPolicy.allowRemote(confirmed,testDataConfirmed))
+        _state.update{it.copy(narrative=Narrative(text=result.text,sourceHash=MatchFacts.hash(events),sourceVersion=match.eventVersion),
+            unconfirmedFacts=!confirmed, generationNotice=result.notice+if(!confirmed) " Borrador local: sincroniza y vuelve a generar antes de guardar o aprobar." else " Guarda la revisión para conservarla.")}
     }
     fun saveNarrative(text: String,approve: Boolean)=action {
         val current=_state.value;val draft=current.narrative
-        require(draft.sourceHash.isNotBlank()) { "Primero genera un borrador con IA" }
+        require(draft.sourceHash.isNotBlank()) { "Primero genera un borrador" }
+        require(current.canPersistNarrative) { "Sincroniza y vuelve a generar antes de guardar o aprobar" }
         if(approve)require(!current.feed.cached&&!current.feed.pending&&draft.sourceHash==MatchFacts.hash(current.feed.events)
             && draft.sourceVersion==current.feed.match?.eventVersion) { "Los eventos cambiaron; genera y revisa otro borrador" }
-        repo.saveNarrative(id,text,draft.sourceHash,draft.sourceVersion,approve)
+        val saved=withTimeoutOrNull(10_000){repo.saveNarrative(id,text,draft.sourceHash,draft.sourceVersion,approve);true}
+        check(saved==true) { "Guardado aún sin confirmar; puede sincronizarse después. Revisa al reconectar." }
     }
 }

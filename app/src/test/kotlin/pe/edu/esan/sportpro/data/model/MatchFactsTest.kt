@@ -9,8 +9,8 @@ class MatchFactsTest {
     @Test fun unknownMinuteAndPlayerAreAllowedWithoutInventingThem() {
         assertNull(MatchFacts.validate("", "a", match, "", ""))
         val facts=MatchFacts.aiFacts(match,listOf(goal))
-        assertTrue(facts.contains("minuto desconocido")); assertTrue(facts.contains("jugador desconocido"))
-        assertTrue(facts.contains("in_progress")); assertTrue(facts.contains("1-0"))
+        assertTrue(facts.contains("minute=UNKNOWN")); assertTrue(facts.contains("player=UNKNOWN"))
+        assertFalse(facts.contains("in_progress")); assertTrue(facts.contains("type=GOAL"))
     }
     @Test fun correctionAndVoidRecomputeScore() {
         assertEquals(1 to 0,MatchFacts.score(match,listOf(goal)))

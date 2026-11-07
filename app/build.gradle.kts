@@ -1,18 +1,9 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.google.services)
     alias(libs.plugins.compose.compiler)
 }
-
-val summaryProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) file.inputStream().use { load(it) }
-}
-fun configString(name: String): String = "\"" + summaryProperties.getProperty(name, "")
-    .replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "").replace("\r", "") + "\""
 
 android {
     namespace = "pe.edu.esan.sportpro"
@@ -22,11 +13,8 @@ android {
         applicationId = "pe.edu.esan.sportpro"
         minSdk = 24
         targetSdk = 35
-        versionCode = 9
+        versionCode = 12
         versionName = "1.3.0"
-        buildConfigField("String", "SUMMARY_BASE_URL", configString("SUMMARY_BASE_URL"))
-        buildConfigField("String", "SUMMARY_API_KEY", configString("SUMMARY_API_KEY"))
-        buildConfigField("String", "SUMMARY_MODEL", configString("SUMMARY_MODEL"))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -107,8 +95,8 @@ dependencies {
     // Logging
     implementation(libs.timber)
 
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.gson)
+    implementation("com.google.firebase:firebase-ai")
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
 
     // Testing
     testImplementation(libs.junit)

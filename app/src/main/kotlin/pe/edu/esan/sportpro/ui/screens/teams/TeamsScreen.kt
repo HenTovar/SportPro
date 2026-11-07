@@ -3,6 +3,8 @@
 package pe.edu.esan.sportpro.ui.screens.teams
 
 import pe.edu.esan.sportpro.ui.navigation.safeBack
+import pe.edu.esan.sportpro.ui.navigation.LocalTeamSession
+import pe.edu.esan.sportpro.ui.navigation.StructurePolicy
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +61,7 @@ import pe.edu.esan.sportpro.ui.common.rememberEsStaff
 @Composable
 fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false, pickMatches: Boolean = false, pickCommunity: Boolean = false) {
     val container = remember { DefaultAppContainer() }
+    val session = LocalTeamSession.current
     val esStaff = rememberEsStaff(container.authRepository)
     var estado by remember { mutableStateOf<EstadoLista<Team>>(EstadoLista.Cargando) }
     var recarga by remember { mutableIntStateOf(0) }
@@ -114,8 +117,12 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                 items(equipos.sortedBy { it.category.ordinal }) { equipo ->
                     Card(modifier = Modifier.fillMaxWidth().then(
                         if (pickTrainings || pickMatches || pickCommunity) Modifier.clickable(enabled = equipo.id.isNotBlank()) {
+                            session.select(equipo.id)
                             navController.navigate("${if (pickCommunity) "community" else if (pickMatches) "matches" else "trainings"}/${Uri.encode(equipo.id)}")
-                        } else Modifier
+                        } else Modifier.clickable(enabled = equipo.id.isNotBlank()) {
+                            session.select(equipo.id)
+                            navController.navigate(StructurePolicy.team(equipo.id))
+                        }
                     )) {
                         Column(Modifier.padding(16.dp)) {
                             Row {
@@ -137,12 +144,12 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                                 Spacer(Modifier.width(8.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
-                                        if (equipo.id.isNotBlank()) navController.navigate("players/${Uri.encode(equipo.id)}")
+                                        if (equipo.id.isNotBlank()) session.select(equipo.id); navController.navigate(StructurePolicy.team(equipo.id, "players"))
                                     }) {
                                         Text("Jugadores")
                                     }
                                     OutlinedButton(enabled = equipo.id.isNotBlank(), onClick = {
-                                        if (equipo.id.isNotBlank()) navController.navigate("trainings/${Uri.encode(equipo.id)}")
+                                        if (equipo.id.isNotBlank()) session.select(equipo.id); navController.navigate(StructurePolicy.team(equipo.id, "trainings"))
                                     }) {
                                         Text("Entrenamientos")
                                     }

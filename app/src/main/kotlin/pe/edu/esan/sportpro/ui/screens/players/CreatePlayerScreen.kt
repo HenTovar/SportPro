@@ -23,6 +23,9 @@ import coil.compose.AsyncImage
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
+import pe.edu.esan.sportpro.ui.common.boundedPhotoUpload
+import kotlinx.coroutines.TimeoutCancellationException
+import com.google.firebase.storage.UploadTask
 import kotlinx.coroutines.CancellationException
 
 import com.google.firebase.storage.FirebaseStorage
@@ -99,15 +102,24 @@ fun CreatePlayerScreen(teamId: String, navController: NavHostController, playerI
             // Iniciar carga a Cloud Storage
             scope.launch {
                 isUploadingPhoto = true
+                var upload: UploadTask? = null
                 try {
-                    requireStaff(firestore)
-                    val photoRef = storage.reference.child("players/${UUID.randomUUID()}.jpg")
-                    photoRef.putFile(uri).await()
-                    photoUrl = photoRef.downloadUrl.await().toString()
+                    boundedPhotoUpload(cancel = { upload?.cancel() }) {
+                        requireStaff(firestore)
+                        val photoRef = storage.reference.child("players/${UUID.randomUUID()}.jpg")
+                        upload = photoRef.putFile(uri)
+                        upload!!.await()
+                        photoUrl = photoRef.downloadUrl.await().toString()
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    upload?.cancel(); photoUri = null
+                    error = "La foto no pudo subirse en 20 segundos. Comprueba si Storage está habilitado. Puedes guardar sin foto."
                 } catch (e: CancellationException) {
+                    upload?.cancel()
                     throw e
                 } catch (e: Exception) {
-                    error = "Error: ${e.message}"
+                    upload?.cancel(); photoUri = null
+                    error = "No se pudo subir la foto. Comprueba si Storage está habilitado y tu conexión. Puedes guardar sin foto."
                 } finally {
                     isUploadingPhoto = false
                 }

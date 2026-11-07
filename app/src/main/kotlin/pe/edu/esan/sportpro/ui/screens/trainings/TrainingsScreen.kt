@@ -3,6 +3,7 @@
 package pe.edu.esan.sportpro.ui.screens.trainings
 
 import pe.edu.esan.sportpro.ui.navigation.safeBack
+import pe.edu.esan.sportpro.ui.navigation.BindSelectedTeam
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,7 +51,8 @@ import java.util.Locale
  * Desde cada sesión se registra la asistencia. Sólo el staff crea sesiones.
  */
 @Composable
-fun TrainingsScreen(teamId: String, navController: NavHostController) {
+fun TrainingsScreen(teamId: String, navController: NavHostController, embedded: Boolean = false) {
+    BindSelectedTeam(teamId)
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
     var ownPlayerId by remember { mutableStateOf("") }
@@ -67,7 +69,7 @@ fun TrainingsScreen(teamId: String, navController: NavHostController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!embedded) TopAppBar(
                 title = { Text("Entrenamientos") },
                 navigationIcon = {
                     IconButton(onClick = { navController.safeBack() }) {
@@ -90,7 +92,7 @@ fun TrainingsScreen(teamId: String, navController: NavHostController) {
             modifier = Modifier.padding(padding)
         ) { sesiones ->
             LazyColumn(
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

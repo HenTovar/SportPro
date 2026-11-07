@@ -3,6 +3,7 @@
 package pe.edu.esan.sportpro.ui.screens.players
 
 import pe.edu.esan.sportpro.ui.navigation.safeBack
+import pe.edu.esan.sportpro.ui.navigation.BindSelectedTeam
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,10 @@ import androidx.compose.material3.TopAppBar
 import kotlinx.coroutines.flow.first
 import pe.edu.esan.sportpro.data.model.RolePolicy
 import pe.edu.esan.sportpro.data.repository.Result
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.*
+import pe.edu.esan.sportpro.ui.navigation.StructurePolicy
+import pe.edu.esan.sportpro.data.model.PlayerPosition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,9 +63,13 @@ import pe.edu.esan.sportpro.ui.common.rememberEsStaff
  * contactos de otros jugadores (privacidad de menores).
  */
 @Composable
-fun PlayersScreen(teamId: String, navController: NavHostController) {
+fun PlayersScreen(teamId: String, navController: NavHostController, embedded: Boolean = false) {
+    BindSelectedTeam(teamId)
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
+    var query by rememberSaveable(teamId) { mutableStateOf("") }
+    var selectedPosition by rememberSaveable(teamId) { mutableStateOf("") }
+    var positionMenu by remember { mutableStateOf(false) }
     var estado by remember { mutableStateOf<EstadoLista<Player>>(EstadoLista.Cargando) }
 
     LaunchedEffect(teamId) {
@@ -80,7 +89,7 @@ fun PlayersScreen(teamId: String, navController: NavHostController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!embedded) TopAppBar(
                 title = { Text("Jugadores") },
                 navigationIcon = {
                     IconButton(onClick = { navController.safeBack() }) {
@@ -103,17 +112,28 @@ fun PlayersScreen(teamId: String, navController: NavHostController) {
             modifier = Modifier.padding(padding)
         ) { jugadores ->
             LazyColumn(
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(jugadores.sortedBy { it.number }) { jugador ->
+                item {
+                    OutlinedTextField(query, { query = it }, label = { Text("Buscar jugador o dorsal") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    TextButton(onClick = { positionMenu = true }) { Text(if (selectedPosition.isBlank()) "Todas las posiciones" else selectedPosition.replace('_', ' ')) }
+                    DropdownMenu(expanded = positionMenu, onDismissRequest = { positionMenu = false }) {
+                        DropdownMenuItem(text = { Text("Todas las posiciones") }, onClick = { selectedPosition = ""; positionMenu = false })
+                        PlayerPosition.entries.forEach { position ->
+                            DropdownMenuItem(text = { Text(position.name.replace('_', ' ')) }, onClick = { selectedPosition = position.name; positionMenu = false })
+                        }
+                    }
+                }
+                val filtered = StructurePolicy.players(jugadores, query, PlayerPosition.entries.find { it.name == selectedPosition })
+                if (filtered.isEmpty() && jugadores.isNotEmpty()) item { Text("No hay jugadores con esos filtros") }
+                items(filtered, key = { it.id }) { jugador ->
                     TarjetaJugador(
                         jugador = jugador,
                         verDatosPrivados = true,
                         onEditar = if (esStaff) ({ navController.navigate("editPlayer/$teamId/${jugador.id}") }) else null,
-                        onEntrenamientos = { navController.navigate("trainings/$teamId") },
-                        onPartidos = { navController.navigate("matches/$teamId") },
                         onHistorial = { navController.navigate("attendanceHistory/$teamId/${jugador.id}") }
                     )
                 }
@@ -123,7 +143,7 @@ fun PlayersScreen(teamId: String, navController: NavHostController) {
 }
 
 @Composable
-private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistorial: () -> Unit, onEditar: (() -> Unit)?, onEntrenamientos: () -> Unit, onPartidos: () -> Unit) {
+private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistorial: () -> Unit, onEditar: (() -> Unit)?) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (jugador.photoUrl.isNullOrBlank()) {
@@ -150,8 +170,6 @@ private fun TarjetaJugador(jugador: Player, verDatosPrivados: Boolean, onHistori
                     )
                 }
                 if (onEditar != null) OutlinedButton(onClick = onEditar) { Text("Editar jugador") }
-                OutlinedButton(onClick = onEntrenamientos) { Text("Entrenamientos y horarios") }
-                OutlinedButton(onClick = onPartidos) { Text("Partidos del equipo") }
                 OutlinedButton(onClick = onHistorial, modifier = Modifier.padding(top = 8.dp)) {
                     Text("Historial de asistencia")
                 }

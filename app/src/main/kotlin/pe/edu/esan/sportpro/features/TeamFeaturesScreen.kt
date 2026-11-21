@@ -38,13 +38,13 @@ fun TeamFeaturesScreen(teamId: String,nav: NavHostController) {
                 }
             } }
             if(state.team!=teamId || state.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth());Text("Cargando datos autorizados…") }
-            state.error?.let { item { MessageNotice(it,true) } }
+            state.error?.let { item { MessageNotice(it,true); TextButton(onClick=session.refresh) { Text("Volver a cargar datos") } } }
             item { MonthChooser(month) {year=it.year;number=it.number} }
-            if(state.team==teamId && state.error==null) {
+            if(state.team==teamId && state.error==null && !state.loading) {
                 if(selected=="calendar") {
                     val entries=TeamInsights.agenda(state.matches,state.trainings).filter { month.contains(it.at) }
                     item { MonthCalendar(month,entries) { entry -> if(entry.kind.startsWith("Partido"))nav.navigate(entry.route) else nav.navigate(StructurePolicy.team(teamId,"trainings")) } }
-                    if(entries.isEmpty())item { Text("No hay partidos ni entrenamientos registrados en este mes.") }
+                    if(entries.isEmpty())item { Text(if(state.cached || state.pending) "La copia disponible no muestra actividad este mes; falta confirmación del servidor." else "No hay partidos ni entrenamientos registrados en este mes.") }
                     items(entries,key={it.id}){entry ->
                         OutlinedCard(onClick={if(entry.kind.startsWith("Partido"))nav.navigate(entry.route)else nav.navigate(StructurePolicy.team(teamId,"trainings"))},modifier=Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)){Text(entry.title,style=MaterialTheme.typography.titleMedium);Text(SimpleDateFormat("dd/MM HH:mm",Locale("es","PE")).format(Date(entry.at)));Text(entry.kind)}
@@ -57,7 +57,7 @@ fun TeamFeaturesScreen(teamId: String,nav: NavHostController) {
                     val streak=TeamInsights.streak(teamId,state.matches,state.events)
                     item { Text("Racha: "+if(streak.count>0)"${streak.count} ${streak.result}" else streak.result,style=MaterialTheme.typography.titleMedium) }
                     item { Text("Goles por jugador · todos los partidos cargados",style=MaterialTheme.typography.titleMedium);Text("Sólo goles vigentes de este equipo. Agrupados por el nombre escrito en el evento; los homónimos no se distinguen.",style=MaterialTheme.typography.bodySmall) }
-                    if(goals.isEmpty())item { Text("Sin goles registrados") }
+                    if(goals.isEmpty())item { Text(if(state.cached || state.pending) "Sin goles en los datos disponibles; aún sin confirmar." else "Sin goles registrados") }
                     items(goals,key={it.first}) { row -> Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {Text(row.first,Modifier.weight(1f));Text(row.second.toString())} }
                     item { Text("Asistencia del mes",style=MaterialTheme.typography.titleMedium)
                         Text("${attendance.present} presentes · ${attendance.absent} faltas · ${attendance.other} lesión/justificada")

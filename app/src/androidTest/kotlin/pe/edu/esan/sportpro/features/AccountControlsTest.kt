@@ -28,9 +28,11 @@ class AccountControlsTest {
         rule.runOnIdle { assertEquals(0, exits) }
         rule.onNodeWithTag("account_logout").assertIsDisplayed()
     }
-    @Test fun switchRequiresConfirmation() {
+    @Test fun switchingUsesTheSingleConfirmedExit() {
         var exits = 0; render { exits++ }
-        rule.onNodeWithTag("account_switch").performClick()
+        rule.onNodeWithTag("account_switch").assertDoesNotExist()
+        rule.onNodeWithText("Para cambiar de cuenta, cierra esta sesión e inicia otra.").assertIsDisplayed()
+        rule.onNodeWithTag("account_logout").performClick()
         rule.runOnIdle { assertEquals(0, exits) }
         rule.onNodeWithText("Confirmar").performClick()
         rule.runOnIdle { assertEquals(1, exits) }

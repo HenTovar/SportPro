@@ -18,12 +18,12 @@ class DashboardShortcutsTest {
     private val training = Training(id="training",teamId="team",name="Sesión",date=Long.MAX_VALUE-1000)
     private val match = LiveMatch(id="match",name="Jornada",status="in_progress",teamA="team")
     private var destination = ""
-    private fun render(role:UserRole) {
+    private fun render(role:UserRole, status: String = "in_progress") {
         val user = User(uid="fixture",name="Alex",role=role,teamId="team",playerId="player")
         rule.setContent {
             SportProTheme {
                 CompositionLocalProvider(LocalTeamSession provides TeamSession(user,listOf(team),team,false)) {
-                    Surface { HomeDashboard(user,false,null,onNavigate={destination=it},selectedTeam=team,matches=listOf(match),trainings=listOf(training)) }
+                    Surface { HomeDashboard(user,false,null,onNavigate={destination=it},selectedTeam=team,matches=listOf(match.copy(status = status)),trainings=listOf(training)) }
                 }
             }
         }
@@ -53,5 +53,15 @@ class DashboardShortcutsTest {
         render(UserRole.JUGADOR)
         rule.onNodeWithText("EN VIVO · Jornada").performScrollTo().performClick()
         rule.runOnIdle { assertEquals("liveMatch/match?event=false",destination) }
+    }
+    @Test fun preparationShortcutDoesNotNeedTheIntermediateMatchButton() {
+        render(UserRole.ENTRENADOR, "not_started")
+        rule.onNodeWithText("Preparar partido").performScrollTo().performClick()
+        rule.runOnIdle { assertEquals("liveMatch/match?prepare=true", destination) }
+    }
+    @Test fun appearanceIsVisibleFromTheDashboard() {
+        render(UserRole.JUGADOR)
+        rule.onNodeWithText("Pantalla y letra").performScrollTo().performClick()
+        rule.runOnIdle { assertEquals("appearance", destination) }
     }
 }

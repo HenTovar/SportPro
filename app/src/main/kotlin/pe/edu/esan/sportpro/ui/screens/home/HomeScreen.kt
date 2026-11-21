@@ -9,6 +9,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import pe.edu.esan.sportpro.features.ScreenActionPolicy
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavHostController
@@ -55,16 +57,13 @@ fun HomeScreen(navController: NavHostController) {
     }
     HomeDashboard(session.profile, session.loading, session.error ?: matchError ?: trainingError,
         isCreator(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser),
-        onNavigate = { navController.navigate(it) { launchSingleTop = true } },
-        onLogout = {
-            navController.navigate("profile") { launchSingleTop = true }
-        }, selectedTeam = session.selected, matches = matches, trainings = trainings, onRefresh = { revision++ }, agendaLoading = matchesLoading || trainingsLoading, familyContent = { FamilyLinkControls(session) })
+        onNavigate = { navController.navigate(it) { launchSingleTop = true } }, selectedTeam = session.selected, matches = matches, trainings = trainings, onRefresh = { revision++ }, agendaLoading = matchesLoading || trainingsLoading, account = session.account, familyContent = { FamilyLinkControls(session) })
 }
 
 @Composable
 fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boolean = false,
-    onNavigate: (String) -> Unit = {}, onLogout: () -> Unit = {}, selectedTeam: Team? = null,
-    matches: List<LiveMatch> = emptyList(), trainings: List<Training> = emptyList(), onRefresh: () -> Unit = {}, agendaLoading: Boolean = false, familyContent: @Composable () -> Unit = {}) {
+    onNavigate: (String) -> Unit = {}, selectedTeam: Team? = null,
+    matches: List<LiveMatch> = emptyList(), trainings: List<Training> = emptyList(), onRefresh: () -> Unit = {}, agendaLoading: Boolean = false, account: User? = profile, familyContent: @Composable () -> Unit = {}) {
     val staff = RolePolicy.isStaff(profile?.role)
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
@@ -76,13 +75,19 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("SPORTPRO", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            StatusBadge(if (creator) "Creador" else RolePolicy.label(profile?.role), BadgeTone.Positive)
+            Column(horizontalAlignment = Alignment.End) {
+                StatusBadge(if (creator) "Creador" else RolePolicy.label(profile?.role), BadgeTone.Positive)
+                TextButton(onClick = { onNavigate(ScreenActionPolicy.appearanceRoute) }) { Text("Pantalla y letra") }
+            }
         }
         SportHero(if (staff) "TU ACADEMIA, CONECTADA" else "EL EQUIPO EMPIEZA CONTIGO",
             if (profile?.name.isNullOrBlank()) "Tu próxima jugada" else "Hola, ${profile?.name?.substringBefore(' ')}",
             if (staff) "Tu agenda y el control del equipo, sin rodeos." else "Tu asistencia, tus partidos y tu comunidad.")
         if (loading || agendaLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { MessageNotice(it, true) }
+        if (account != null && account.isActive) {
+            ActionTile("Pruebas abiertas", "Avisos publicados y filtros", Icons.Default.Search, { onNavigate("open_trials") })
+        }
         if (profile != null && profile.isActive) {
             if (profile.role == UserRole.PADRE) familyContent()
             TeamSelector(onManage = { onNavigate("teams") })
@@ -94,9 +99,9 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
                 live?.let {
                     ActionTile("EN VIVO · ${it.name}", "Abrir marcador y cronología", Icons.Default.PlayArrow, { onNavigate(StructurePolicy.match(it.id)) })
                 }
-                AgendaCard("Próximo partido", nextMatch?.name ?: if (agendaLoading) "Cargando agenda…" else null, nextMatch?.date,
-                    "No hay un partido futuro programado", { onNavigate(nextMatch?.let { StructurePolicy.match(it.id) } ?: "matches/${StructurePolicy.component(team)}") })
-                AgendaCard(if (training?.status == TrainingStatus.EN_CURSO) "Entrenamiento en curso" else "Próximo entrenamiento", training?.name ?: if (agendaLoading) "Cargando agenda…" else null, training?.date,
+                AgendaCard("Próximo partido", nextMatch?.name ?: if (agendaLoading) "Cargando agenda…" else if (error != null) "Agenda sin confirmar" else null, nextMatch?.date,
+                    "No hay un partido futuro programado", { onNavigate(nextMatch?.let { ScreenActionPolicy.matchRoute(it.id, it.status) } ?: "matches/${StructurePolicy.component(team)}") })
+                AgendaCard(if (training?.status == TrainingStatus.EN_CURSO) "Entrenamiento en curso" else "Próximo entrenamiento", training?.name ?: if (agendaLoading) "Cargando agenda…" else if (error != null) "Agenda sin confirmar" else null, training?.date,
                     "No hay entrenamientos próximos", { onNavigate(StructurePolicy.team(team, "trainings")) })
                 SectionHeading("Accesos rápidos", if (staff) "Gestiona sin volver a buscar el equipo" else "Tu progreso en un toque")
                 if (staff) {
@@ -104,13 +109,19 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
                         onNavigate(training?.let { StructurePolicy.attendance(team, it.id) } ?: StructurePolicy.team(team, "trainings"))
                     })
                     ActionTile(if (live != null) "Registrar evento" else "Preparar partido", live?.name ?: pending?.name ?: "Ver partidos del equipo", Icons.Default.Add, {
-                        onNavigate(live?.let { StructurePolicy.match(it.id, event = true) } ?: pending?.let { StructurePolicy.match(it.id) } ?: "matches/${StructurePolicy.component(team)}")
+                        onNavigate(live?.let { StructurePolicy.match(it.id, event = true) } ?: pending?.let { ScreenActionPolicy.preparationRoute(it.id) } ?: "matches/${StructurePolicy.component(team)}")
                     })
                 } else {
                     StructurePolicy.ownAttendance(profile)?.let { destination ->
                         ActionTile(if (profile.role == UserRole.PADRE) "Asistencia de mi hijo" else "Mi asistencia", "Historial personal", Icons.Default.Check, { onNavigate(destination) })
                     }
                     ActionTile("Mis partidos", "Agenda y marcadores de mi equipo", Icons.Default.PlayArrow, { onNavigate("matches/${StructurePolicy.component(team)}") })
+                }
+                if (account != null && account.isActive && SimulatedFeesPolicy.validId(team) &&
+                    (SimulatedFeesPolicy.canManage(account) || FamilyPolicy.children(account).any { it.teamId == team })) {
+                    ActionTile("Mensualidades simuladas", "Estado de registro, sin cobros ni dinero", Icons.Default.DateRange, {
+                        onNavigate("simulatedFees/${StructurePolicy.component(team)}")
+                    })
                 }
                 ActionTile("Muro del equipo", "Publicaciones y conversaciones", Icons.Default.Favorite, { onNavigate("community/${StructurePolicy.component(team)}") })
                 ActionTile("Calendario y estadísticas", "Agenda mensual, goles y asistencia", Icons.Default.DateRange, { onNavigate("teamFeatures/${StructurePolicy.component(team)}") })
@@ -119,8 +130,7 @@ fun HomeDashboard(profile: User?, loading: Boolean, error: String?, creator: Boo
         }
         HorizontalDivider()
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { onNavigate("profile") }) { Text("Mi perfil") }
-            TextButton(onClick = onLogout) { Text("Cuenta y sesión") }
+            TextButton(onClick = { onNavigate("profile") }) { Text("Perfil y cuenta") }
         }
     }
 }

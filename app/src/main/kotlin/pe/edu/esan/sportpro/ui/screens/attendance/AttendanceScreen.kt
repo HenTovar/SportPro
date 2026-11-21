@@ -3,6 +3,7 @@
 package pe.edu.esan.sportpro.ui.screens.attendance
 
 import pe.edu.esan.sportpro.ui.navigation.safeBack
+import pe.edu.esan.sportpro.features.UiInteractionPolicy
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -84,7 +85,7 @@ fun AttendanceScreen(
                 Text(java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
                     .format(java.util.Date(training.date)))
             }
-            Text("Marca presente con la casilla; pulsa el estado para marcar ausente.")
+            Text("Elige Presente o Ausente para cada jugador. Tocar el estado ya elegido no lo cambia.")
             // Lista de jugadores con toggles
             LazyColumn(
                 modifier = Modifier
@@ -100,6 +101,7 @@ fun AttendanceScreen(
                             viewModel.toggleAttendance(player.id, isPresent)
                         },
                         canEdit = viewModel.canMarkAttendance() && uiState.isReady && !uiState.isSaving,
+                        hasChoice = UiInteractionPolicy.hasAttendanceChoice(uiState.savedRecords[player.id]?.status, player.id in uiState.editedPlayers),
                         statusLabel = if (player.id in uiState.editedPlayers) null else
                             uiState.savedRecords[player.id]?.status?.let { attendanceStatusLabel(it) } ?: "Sin registrar"
                     )
@@ -139,7 +141,8 @@ fun AttendancePlayerItem(
     isPresent: Boolean,
     onToggle: (Boolean) -> Unit,
     canEdit: Boolean,
-    statusLabel: String? = null
+    statusLabel: String? = null,
+    hasChoice: Boolean = true
 ) {
     Card(
         modifier = Modifier
@@ -160,13 +163,16 @@ fun AttendancePlayerItem(
             )
 
             if (canEdit) {
-                Checkbox(
-                    checked = isPresent,
-                    onCheckedChange = { onToggle(it) },
-                    modifier = Modifier.size(24.dp)
-                )
-                TextButton(onClick = { onToggle(false) }) {
-                    Text(statusLabel ?: if (isPresent) "Presente" else "Ausente")
+                Column {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = hasChoice && isPresent,
+                            onClick = { UiInteractionPolicy.attendanceChoice(isPresent, hasChoice, true)?.let(onToggle) },
+                            label = { Text("Presente") }, modifier = Modifier.heightIn(min = 48.dp))
+                        FilterChip(selected = hasChoice && !isPresent,
+                            onClick = { UiInteractionPolicy.attendanceChoice(isPresent, hasChoice, false)?.let(onToggle) },
+                            label = { Text("Ausente") }, modifier = Modifier.heightIn(min = 48.dp))
+                    }
+                    if (!hasChoice && statusLabel != null) Text(statusLabel, style = MaterialTheme.typography.bodySmall)
                 }
             } else {
                 Text(

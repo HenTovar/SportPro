@@ -16,6 +16,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import pe.edu.esan.sportpro.features.ExerciseCatalogState
+import pe.edu.esan.sportpro.features.rememberExerciseCatalog
+import pe.edu.esan.sportpro.features.UiInteractionPolicy
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.google.firebase.firestore.FirebaseFirestore
@@ -50,6 +55,8 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
     var checkingAccess by remember(trainingId) { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val firestore = FirebaseFirestore.getInstance()
+    var catalogRevision by remember { mutableIntStateOf(0) }
+    val catalog = rememberExerciseCatalog(pe.edu.esan.sportpro.ui.navigation.LocalTeamSession.current.account, catalogRevision)
 
     LaunchedEffect(teamId, trainingId) {
         try {
@@ -113,6 +120,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
                 value = date,
                 onValueChange = { date = it },
                 label = { Text("Fecha (yyyy-mm-dd)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -121,6 +129,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
                 value = time,
                 onValueChange = { time = it },
                 label = { Text("Hora (HH:mm, 24 horas)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -129,6 +138,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
                 value = duration,
                 onValueChange = { duration = it },
                 label = { Text("Duración (minutos)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -146,10 +156,9 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
                 Text("Seleccionar Ejercicios")
             }
 
-            Button(
+            OutlinedButton(
                 onClick = { showNewExerciseDialog = true },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors()
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Nuevo")
                 Spacer(modifier = Modifier.width(4.dp))
@@ -165,7 +174,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
                     ) {
                         selectedExercises.forEach { exerciseId ->
                             Text(
-                                "• $exerciseId",
+                                "• ${UiInteractionPolicy.exerciseLabel(exerciseId, catalog.rows)}",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -234,6 +243,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
         if (showExerciseDialog) {
             ExerciseSelectionDialog(
                 initialSelectedIds = selectedExercises,
+                catalog = catalog,
                 onDismiss = { showExerciseDialog = false },
                 onExercisesSelected = { exercises ->
                     selectedExercises = exercises
@@ -248,6 +258,7 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
                 onDismiss = { showNewExerciseDialog = false },
                 onExerciseCreated = { exercise ->
                     selectedExercises = selectedExercises + exercise.id
+                    catalogRevision++
                     showNewExerciseDialog = false
                     newExerciseName = ""
                     newExerciseDescription = ""
@@ -265,29 +276,15 @@ fun CreateTrainingScreen(teamId: String, navController: NavHostController, train
 fun ExerciseSelectionDialog(
     onDismiss: () -> Unit,
     onExercisesSelected: (List<String>) -> Unit,
-    initialSelectedIds: List<String> = emptyList()
+    initialSelectedIds: List<String> = emptyList(),
+    catalog: ExerciseCatalogState
 ) {
     var selectedIds by remember { mutableStateOf(initialSelectedIds.toSet()) }
-    var exercisesList by remember {
-        mutableStateOf(pe.edu.esan.sportpro.data.model.ExerciseLibrary.defaultExercises)
-    }
-    var loadError by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        try {
-            val documents = FirebaseFirestore.getInstance().collection("exercises").get().await()
-            val savedExercises = documents.documents.mapNotNull { document ->
-                document.toObject(Exercise::class.java)?.copy(id = document.id)
-            }
-            exercisesList = (exercisesList + savedExercises).distinctBy { it.id }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            loadError = "No se pudo cargar la biblioteca completa. Se conservan los ejercicios seleccionados."
-        }
-    }
+    val exercisesList = catalog.rows.values.toList()
+    val loadError = if (catalog.unavailable) "No se pudo cargar la biblioteca completa. Se conservan los ejercicios seleccionados." else ""
     val displayedExercises = exercisesList + initialSelectedIds.filter { id ->
         exercisesList.none { it.id == id }
-    }.map { id -> Exercise(id = id, name = "Ejercicio guardado ($id)") }
+    }.map { id -> Exercise(id = id, name = "Ejercicio no disponible") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -299,6 +296,7 @@ fun ExerciseSelectionDialog(
                     .heightIn(max = 300.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (catalog.loading) item { Text("Cargando biblioteca…") }
                 if (loadError.isNotEmpty()) {
                     item { Text(loadError, color = MaterialTheme.colorScheme.error) }
                 }
@@ -337,7 +335,7 @@ fun ExerciseSelectionDialog(
         },
         confirmButton = {
             Button(onClick = { onExercisesSelected(selectedIds.toList()) }) {
-                Text("Seleccionar")
+                Text("Usar ejercicios seleccionados")
             }
         },
         dismissButton = {
@@ -392,6 +390,7 @@ fun CreateExerciseDialog(
                     value = duration,
                     onValueChange = { duration = it },
                     label = { Text("Duración (min)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -435,7 +434,7 @@ fun CreateExerciseDialog(
                     }
                 }
             ) {
-                Text(if (saving) "Guardando..." else "Crear")
+                Text(if (saving) "Guardando..." else "Guardar ejercicio")
             }
         },
         dismissButton = {

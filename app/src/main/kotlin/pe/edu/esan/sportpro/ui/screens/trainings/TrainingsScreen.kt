@@ -4,6 +4,8 @@ package pe.edu.esan.sportpro.ui.screens.trainings
 
 import pe.edu.esan.sportpro.ui.navigation.safeBack
 import pe.edu.esan.sportpro.ui.navigation.BindSelectedTeam
+import pe.edu.esan.sportpro.features.rememberExerciseCatalog
+import pe.edu.esan.sportpro.features.UiInteractionPolicy
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -54,6 +56,7 @@ import java.util.Locale
 fun TrainingsScreen(teamId: String, navController: NavHostController, embedded: Boolean = false) {
     BindSelectedTeam(teamId)
     val familySession = pe.edu.esan.sportpro.ui.navigation.LocalTeamSession.current
+    val catalog = rememberExerciseCatalog(familySession.account)
     val container = remember { DefaultAppContainer() }
     val esStaff = rememberEsStaff(container.authRepository)
     var ownPlayerId by remember { mutableStateOf("") }
@@ -98,6 +101,8 @@ fun TrainingsScreen(teamId: String, navController: NavHostController, embedded: 
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (catalog.loading) item { Text("Cargando nombres de ejercicios…", style = MaterialTheme.typography.bodySmall) }
+                if (catalog.unavailable) item { Text("No se pudieron confirmar todos los nombres de la biblioteca.", style = MaterialTheme.typography.bodySmall) }
                 items(sesiones.sortedByDescending { it.date }) { sesion ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
@@ -106,7 +111,7 @@ fun TrainingsScreen(teamId: String, navController: NavHostController, embedded: 
                             if (sesion.objective.isNotBlank()) Text("Objetivo: ${sesion.objective}")
                             if (sesion.exercises.isNotEmpty()) {
                                 Text(
-                                    "Ejercicios: ${sesion.exercises.joinToString(", ")}",
+                                    "Ejercicios: ${sesion.exercises.joinToString("; ") { UiInteractionPolicy.exerciseLabel(it, catalog.rows) }}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }

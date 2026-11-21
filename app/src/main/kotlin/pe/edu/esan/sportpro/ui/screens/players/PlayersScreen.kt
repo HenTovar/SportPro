@@ -104,9 +104,9 @@ fun PlayersScreen(teamId: String, navController: NavHostController, embedded: Bo
         },
         floatingActionButton = {
             if (esStaff) {
-                FloatingActionButton(onClick = { navController.navigate("createPlayer/$teamId") }) {
-                    Icon(Icons.Filled.Add, contentDescription = "Código de equipo")
-                }
+                ExtendedFloatingActionButton(onClick = { navController.navigate("createPlayer/$teamId") },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("Invitar jugadores") })
             }
         }
     ) { padding ->

@@ -17,9 +17,7 @@ import pe.edu.esan.sportpro.ui.screens.auth.RegisterScreen
 import pe.edu.esan.sportpro.ui.screens.home.HomeScreen
 import pe.edu.esan.sportpro.ui.screens.teams.TeamsScreen
 import pe.edu.esan.sportpro.ui.screens.teams.CreateTeamScreen
-import pe.edu.esan.sportpro.ui.screens.players.PlayersScreen
 import pe.edu.esan.sportpro.ui.screens.players.CreatePlayerScreen
-import pe.edu.esan.sportpro.ui.screens.trainings.TrainingsScreen
 import pe.edu.esan.sportpro.ui.screens.trainings.CreateTrainingScreen
 import pe.edu.esan.sportpro.ui.screens.attendance.AttendanceScreen
 import pe.edu.esan.sportpro.ui.screens.attendance.PlayerAttendanceHistoryScreen
@@ -85,11 +83,38 @@ private fun AppDestinations(startDestination: String, navController: NavHostCont
             HomeScreen(navController = navController)
         }
 
+        composable("simulatedFees/{teamId}") { entry ->
+            val session = LocalTeamSession.current
+            val account = session.account
+            val teamId = entry.arguments?.getString("teamId").orEmpty()
+            when {
+                session.loading -> androidx.compose.material3.LinearProgressIndicator()
+                account != null && account.isActive &&
+                    pe.edu.esan.sportpro.data.model.SimulatedFeesPolicy.validId(teamId) &&
+                    (pe.edu.esan.sportpro.data.model.SimulatedFeesPolicy.canManage(account) ||
+                        pe.edu.esan.sportpro.data.model.FamilyPolicy.children(account).any { it.teamId == teamId }) ->
+                    pe.edu.esan.sportpro.ui.screens.fees.SimulatedFeesScreen(teamId, account) { navController.safeBack() }
+                else -> androidx.compose.material3.Text("No tienes una ficha autorizada para consultar este equipo.")
+            }
+        }
+        composable("open_trials") {
+            val session = LocalTeamSession.current
+            val account = session.account
+            when {
+                session.loading -> androidx.compose.material3.CircularProgressIndicator()
+                account?.isActive == true -> pe.edu.esan.sportpro.ui.screens.trials.OpenTrialsScreen(account) { navController.safeBack() }
+                else -> androidx.compose.material3.Text("Inicia sesión con una cuenta activa.")
+            }
+        }
+
         composable("teamFeatures/{teamId}") { entry ->
             pe.edu.esan.sportpro.features.TeamFeaturesScreen(entry.arguments?.getString("teamId").orEmpty(),navController)
         }
         composable("profile") {
             pe.edu.esan.sportpro.ui.screens.home.AdminProfileScreen(navController)
+        }
+        composable(pe.edu.esan.sportpro.features.ScreenActionPolicy.appearanceRoute) {
+            pe.edu.esan.sportpro.features.AppearanceScreen(LocalTeamSession.current.account?.uid.orEmpty()) { navController.safeBack() }
         }
         composable("myData") {
             pe.edu.esan.sportpro.ui.guided.MyDataScreen(navController)
@@ -124,9 +149,13 @@ private fun AppDestinations(startDestination: String, navController: NavHostCont
         composable("matches/{teamId}") { entry ->
             pe.edu.esan.sportpro.ui.screens.home.MatchesScreen(entry.arguments?.getString("teamId") ?: "", navController)
         }
-        composable("liveMatch/{matchId}?event={event}", arguments = listOf(navArgument("event") { type = NavType.BoolType; defaultValue = false })) { entry ->
+        composable("liveMatch/{matchId}?event={event}&prepare={prepare}", arguments = listOf(
+            navArgument("event") { type = NavType.BoolType; defaultValue = false },
+            navArgument("prepare") { type = NavType.BoolType; defaultValue = false }
+        )) { entry ->
             pe.edu.esan.sportpro.ui.screens.matches.LiveMatchScreen(entry.arguments?.getString("matchId") ?: "", navController,
-                openEvent = entry.arguments?.getBoolean("event") == true)
+                openEvent = entry.arguments?.getBoolean("event") == true,
+                openPreparation = entry.arguments?.getBoolean("prepare") == true)
         }
         composable("team/{teamId}?tab={tab}", arguments = listOf(navArgument("tab") { defaultValue = "players" })) { entry ->
             TeamScreen(entry.arguments?.getString("teamId").orEmpty(), entry.arguments?.getString("tab").orEmpty(), navController)
@@ -135,20 +164,12 @@ private fun AppDestinations(startDestination: String, navController: NavHostCont
             pe.edu.esan.sportpro.ui.screens.community.CommunityScreen(entry.arguments?.getString("teamId") ?: "", navController)
         }
         // Jugadores
-        composable("players/{teamId}") { backStackEntry ->
-            val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
-            PlayersScreen(teamId = teamId, navController = navController)
-        }
         composable("createPlayer/{teamId}") { backStackEntry ->
             val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
             pe.edu.esan.sportpro.ui.guided.TeamCodeScreen(teamId, navController)
         }
 
         // Entrenamientos
-        composable("trainings/{teamId}") { backStackEntry ->
-            val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
-            TrainingsScreen(teamId = teamId, navController = navController)
-        }
         composable("createTraining/{teamId}") { backStackEntry ->
             val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
             CreateTrainingScreen(teamId = teamId, navController = navController)
@@ -180,16 +201,14 @@ object NavigationRoute {
     const val TEAMS = "teams"
     const val PICK_TEAM_FOR_TRAININGS = "teams?pick=trainings"
     const val CREATE_TEAM = "createTeam"
-    const val PLAYERS = "players"
     const val CREATE_PLAYER = "createPlayer"
-    const val TRAININGS = "trainings"
     const val CREATE_TRAINING = "createTraining"
     const val ATTENDANCE = "attendance"
     const val ATTENDANCE_HISTORY = "attendanceHistory"
 
-    fun playersForTeam(teamId: String) = "players/$teamId"
+    fun playersForTeam(teamId: String) = StructurePolicy.team(teamId, "players")
     fun createPlayerForTeam(teamId: String) = "createPlayer/$teamId"
-    fun trainingsForTeam(teamId: String) = "trainings/$teamId"
+    fun trainingsForTeam(teamId: String) = StructurePolicy.team(teamId, "trainings")
     fun createTrainingForTeam(teamId: String) = "createTraining/$teamId"
     fun attendanceForTraining(teamId: String, trainingId: String) = "attendance/$teamId/$trainingId"
     fun attendanceHistoryForPlayer(teamId: String, playerId: String) = "attendanceHistory/$teamId/$playerId"

@@ -1,6 +1,7 @@
 package pe.edu.esan.sportpro.ui.screens.home
 
 import android.net.Uri
+import pe.edu.esan.sportpro.features.ScreenActionPolicy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -58,7 +59,7 @@ fun MatchesScreen(teamId:String,navController:NavHostController,embedded:Boolean
     Scaffold(topBar={if(!embedded)TopAppBar(title={Text("Partidos del equipo")},navigationIcon={pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(navController)})}) { padding ->
         MatchListContent(rows, loading, error, staff, embedded, query, status,
             onQuery = { query = it }, onStatus = { status = it }, onCreate = { create = true },
-            onOpen = { navController.navigate("liveMatch/" + Uri.encode(it)) },
+            onOpen = { id -> navController.navigate(ScreenActionPolicy.matchRoute(id, rows.firstOrNull { it.id == id }?.status.orEmpty())) },
             modifier = Modifier.padding(padding).consumeWindowInsets(padding))
     }
 

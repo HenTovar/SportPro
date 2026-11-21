@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import pe.edu.esan.sportpro.features.UiInteractionPolicy
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.google.firebase.firestore.FirebaseFirestore
@@ -98,7 +99,7 @@ fun CreateTeamScreen(navController: NavHostController, teamId: String? = null) {
                     onClick = { categoryDropdownExpanded = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Categoría: ${category.name}")
+                    Text("Categoría: ${UiInteractionPolicy.categoryLabel(category)}")
                 }
                 DropdownMenu(
                     expanded = categoryDropdownExpanded,
@@ -107,7 +108,7 @@ fun CreateTeamScreen(navController: NavHostController, teamId: String? = null) {
                 ) {
                     TeamCategory.values().forEach { cat ->
                         DropdownMenuItem(
-                            text = { Text(cat.name) },
+                            text = { Text(UiInteractionPolicy.categoryLabel(cat)) },
                             onClick = {
                                 category = cat
                                 categoryDropdownExpanded = false

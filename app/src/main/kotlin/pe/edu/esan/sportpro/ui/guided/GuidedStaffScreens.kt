@@ -92,20 +92,23 @@ fun GuidedPlayerEditor(teamId: String, playerId: String, nav: NavHostController)
     var message by remember { mutableStateOf<String?>(null) }
     var errors by remember { mutableStateOf(emptyMap<ProfileField, String>()) }
     var playerUid by remember { mutableStateOf("") }
+    var photoUrl by remember(teamId, playerId, actor?.uid) { mutableStateOf<String?>(null) }
     var targetTeam by remember { mutableStateOf("") }
     var moveConfirm by remember { mutableStateOf(false) }
     var removeConfirm by remember { mutableStateOf(false) }
     var refresh by remember { mutableIntStateOf(0) }
     LaunchedEffect(teamId, playerId, allowed, actor?.uid, refresh) {
-        draft = null; playerUid = ""
+        draft = null; playerUid = ""; photoUrl = null
         if (!allowed) return@LaunchedEffect
         busy = true
         try {
-            draft = repo.loadPlayerData(teamId, playerId).asDraft()
-            if (admin) {
-                val result = players.getPlayerById(teamId, playerId).first { it !is Result.Loading }
-                playerUid = (result as? Result.Success)?.data?.userUid.orEmpty()
-            }
+            val loadedDraft = repo.loadPlayerData(teamId, playerId).asDraft()
+            val result = players.getPlayerById(teamId, playerId).first { it !is Result.Loading }
+            val player = (result as? Result.Success)?.data
+                ?: throw IllegalStateException("No se pudo cargar la ficha.")
+            photoUrl = player.photoUrl
+            if (admin) playerUid = player.userUid.orEmpty()
+            draft = loadedDraft
         } catch (e: CancellationException) { throw e }
           catch (e: Exception) { message = "No se pudo cargar la ficha con tu acceso actual." }
         finally { busy = false }
@@ -135,6 +138,7 @@ fun GuidedPlayerEditor(teamId: String, playerId: String, nav: NavHostController)
                     }
                 }
             }) { Text("Guardar cambios") }
+            GuidedFamilyCodeSection(actor, teamId, playerId, editorReady = true, busy = busy)
             OutlinedButton(enabled = !busy, onClick = { removeConfirm = true }) { Text("Retirar del equipo") }
             if (removeConfirm) AlertDialog(onDismissRequest = { if (!busy) removeConfirm = false },
                 title = { Text("¿Retirar esta ficha del equipo?") },

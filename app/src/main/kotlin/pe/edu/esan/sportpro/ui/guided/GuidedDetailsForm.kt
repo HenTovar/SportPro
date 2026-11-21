@@ -41,7 +41,7 @@ fun GuidedDetailsForm(draft: GuidedFormDraft, access: FormAccess, busy: Boolean,
     when (draft.role) {
         UserRole.JUGADOR -> {
             Text("Si eres menor, usa de preferencia el teléfono de tu padre o tutor.", style = MaterialTheme.typography.bodySmall)
-            input(ProfileField.BIRTH_DATE, draft.birthDate, "Fecha de nacimiento (aaaa-mm-dd) *") { draft.copy(birthDate = it.take(10)) }
+            input(ProfileField.BIRTH_DATE, draft.birthDate, "Fecha de nacimiento (aaaa-mm-dd) *", KeyboardType.Ascii) { draft.copy(birthDate = it.take(10)) }
             input(ProfileField.HEIGHT, draft.heightCm, "Estatura en cm (opcional)", KeyboardType.Decimal) { draft.copy(heightCm = it.take(12)) }
             input(ProfileField.WEIGHT, draft.weightKg, "Peso en kg (opcional)", KeyboardType.Decimal) { draft.copy(weightKg = it.take(12)) }
             if (enabled(ProfileField.POSITION)) {

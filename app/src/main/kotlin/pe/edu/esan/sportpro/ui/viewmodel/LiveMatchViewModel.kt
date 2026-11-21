@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import pe.edu.esan.sportpro.data.model.*
 import pe.edu.esan.sportpro.data.repository.*
@@ -12,12 +13,15 @@ import pe.edu.esan.sportpro.data.network.NarrativeGenerator
 
 data class LiveMatchUiState(val profile: User? = null,val feed: MatchFeed = MatchFeed(),
     val narrative: Narrative = Narrative(),val busy: Boolean = false,val error: String? = null,
-    val history: List<EventRevision>? = null,val generationNotice:String?=null,val unconfirmedFacts:Boolean=false) {
+    val history: List<EventRevision>? = null,val generationNotice:String?=null,val unconfirmedFacts:Boolean=false,
+    val eventWrites: Map<String,EventSubmission> = emptyMap()) {
     val canPersistNarrative:Boolean get()=!unconfirmedFacts&&!feed.cached&&!feed.pending
 }
 class LiveMatchViewModel(private val id: String,private val repo: MatchRepository,
-    private val auth: AuthRepository,private val generator: NarrativeGenerator= NarrativeGenerator()):ViewModel() {
+    private val auth: AuthRepository,private val generator: NarrativeGenerator= NarrativeGenerator(),
+    private val eventWriter: EventWriter? = null):ViewModel() {
     private val _state=MutableStateFlow(LiveMatchUiState());val state=_state.asStateFlow()
+    private var nextEventSubmissionId=0L
     init {
         viewModelScope.launch { auth.getCurrentUser().collect { r -> when(r) {
             is Result.Success -> _state.update { it.copy(profile=r.data) }
@@ -49,11 +53,51 @@ class LiveMatchViewModel(private val id: String,private val repo: MatchRepositor
     } }
     fun setStatus(status: String)=action { repo.status(id,status) }
     fun saveType(type: EventType)=action { repo.type(id,type) }
-    fun saveEvent(old: MatchEvent?,type: EventType,minute: String,team: String,player: String,note: String,voided: Boolean=false)=action(old!=null) {
-        val match=requireNotNull(_state.value.feed.match);val time=MatchFacts.validate(minute,team,match,note,player)
-        require(type.id.isNotBlank()) { "Selecciona un tipo del catálogo" }
-        if(old==null) { require(type.active) { "Tipo desactivado" };repo.add(id,type,time,team,player,note) }
-        else { require(!_state.value.feed.cached&&!_state.value.feed.pending) { "Sincroniza antes de corregir; no se borrará el evento" };repo.correct(id,old,type,time,team,player,note,voided) }
+    fun saveEvent(old: MatchEvent?,type: EventType,minute: String,team: String,player: String,note: String,
+        voided: Boolean=false, submissionKey: String=java.util.UUID.randomUUID().toString()): String {
+        val existing=_state.value.eventWrites[submissionKey]
+        if(existing!=null && existing.progress.phase!=SubmissionPhase.REJECTED) return submissionKey
+        val id=++nextEventSubmissionId
+        val draft=EventDraft(old,type,minute,team,player,note,voided)
+        fun change(transform: (EventSubmission)->EventSubmission) { _state.update { state ->
+            val item=state.eventWrites[submissionKey]
+            if(item==null || item.progress.id!=id) state else state.copy(eventWrites=state.eventWrites+(submissionKey to transform(item)))
+        } }
+        _state.update { it.copy(eventWrites=it.eventWrites+(submissionKey to EventSubmission(submissionKey,draft,SubmissionProgress(id,SubmissionPhase.SAVING)))) }
+        viewModelScope.launch {
+            val watchdog=launch { delay(10_000);change { if(it.progress.phase==SubmissionPhase.SAVING) it.copy(progress=SubmissionProgress(id,SubmissionPhase.UNCERTAIN,uncertainWriteMessage())) else it } }
+            try {
+                staff()
+                val state=_state.value
+                val profile=requireNotNull(state.profile) { "Inicia sesión" }
+                require(profile.isActive && profile.uid.isNotBlank()) { "Inicia sesión con una cuenta activa" }
+                val match=requireNotNull(state.feed.match)
+                val allowed=listOf(match.teamA,match.teamB).filter {it.isNotBlank()}.distinct().filter { teamId ->
+                    profile.role==UserRole.ADMIN || (profile.role==UserRole.ENTRENADOR && teamId in profile.coachTeamIds)
+                }
+                require(team in allowed && (old==null || old.teamId in allowed)) { "El equipo no está en tu alcance" }
+                val time=MatchFacts.validate(minute,team,match,note,player)
+                require(type.id.isNotBlank()) { "Selecciona un tipo del catálogo" }
+                if(old==null) require(type.active) { "Tipo desactivado" }
+                else require(!state.feed.cached&&!state.feed.pending) { "Sincroniza antes de corregir; no se borrará el evento" }
+                val queued: (String)->Unit = { eventId -> change {
+                    if(it.progress.phase in listOf(SubmissionPhase.SAVING,SubmissionPhase.UNCERTAIN))
+                        it.copy(eventId=eventId,progress=SubmissionProgress(id,SubmissionPhase.QUEUED,"Guardado en este dispositivo; pendiente de sincronizar.")) else it
+                } }
+                if(eventWriter!=null) eventWriter.write(draft,queued)
+                else if(old==null) repo.add(this@LiveMatchViewModel.id,type,time,team,player,note,queued)
+                else repo.correct(this@LiveMatchViewModel.id,old,type,time,team,player,note,voided)
+                change { it.copy(progress=SubmissionProgress(id,SubmissionPhase.CONFIRMED,"Evento confirmado.")) }
+            } catch(e:Exception) {
+                if(e is CancellationException) {
+                    change { it.copy(progress=SubmissionProgress(id,SubmissionPhase.UNCERTAIN,uncertainWriteMessage())) }
+                    throw e
+                }
+                val phase=writeFailure(e)
+                change { it.copy(progress=SubmissionProgress(id,phase,if(phase==SubmissionPhase.REJECTED)e.message ?: "Evento rechazado; conservamos lo escrito." else uncertainWriteMessage())) }
+            } finally { watchdog.cancel() }
+        }
+        return submissionKey
     }
     fun history(event: MatchEvent)=viewModelScope.launch {
         try { val history=repo.history(id,event.id);_state.update { it.copy(history=history) } }

@@ -47,6 +47,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import pe.edu.esan.sportpro.data.model.Team
 import pe.edu.esan.sportpro.di.DefaultAppContainer
 import pe.edu.esan.sportpro.ui.common.ContenidoLista
@@ -66,6 +69,8 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
     var estado by remember { mutableStateOf<EstadoLista<Team>>(EstadoLista.Cargando) }
     var recarga by remember { mutableIntStateOf(0) }
     var aEliminar by remember { mutableStateOf<Team?>(null) }
+    var deactivating by remember { mutableStateOf(false) }
+    var deactivateError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(recarga) {
@@ -91,7 +96,7 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (pickTrainings || pickMatches || pickCommunity) "Elegí un equipo" else "Equipos") },
+                title = { Text(if (pickTrainings || pickMatches || pickCommunity) "Elige un equipo" else "Equipos") },
                 navigationIcon = {
                     pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(navController)
                 }
@@ -120,7 +125,12 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                     Card(modifier = Modifier.fillMaxWidth().then(
                         if (pickTrainings || pickMatches || pickCommunity) Modifier.clickable(enabled = equipo.id.isNotBlank()) {
                             session.select(equipo.id)
-                            navController.navigate("${if (pickCommunity) "community" else if (pickMatches) "matches" else "trainings"}/${Uri.encode(equipo.id)}")
+                            val destination = when {
+                                pickCommunity -> "community/${Uri.encode(equipo.id)}"
+                                pickMatches -> "matches/${Uri.encode(equipo.id)}"
+                                else -> StructurePolicy.team(equipo.id, "trainings")
+                            }
+                            navController.navigate(destination)
                         } else Modifier.clickable(enabled = equipo.id.isNotBlank()) {
                             session.select(equipo.id)
                             navController.navigate(StructurePolicy.team(equipo.id))
@@ -131,14 +141,14 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
                                 Column(Modifier.weight(1f)) {
                                     Text(equipo.name, style = MaterialTheme.typography.titleMedium)
                                     Text(
-                                        "Categoría: ${equipo.category.name.replace('_', '-')}",
+                                        "Categoría: ${pe.edu.esan.sportpro.features.UiInteractionPolicy.categoryLabel(equipo.category)}",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
                                 if (esStaff && !(pickTrainings || pickMatches || pickCommunity)) {
                                     TextButton(onClick = { navController.navigate("editTeam/${Uri.encode(equipo.id)}") }) { Text("Editar") }
-                                    IconButton(onClick = { aEliminar = equipo }) {
-                                        Icon(Icons.Filled.Delete, contentDescription = "Eliminar equipo")
+                                    IconButton(onClick = { if (!deactivating) { deactivateError = null; aEliminar = equipo } }) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Desactivar equipo")
                                     }
                                 }
                             }
@@ -166,19 +176,37 @@ fun TeamsScreen(navController: NavHostController, pickTrainings: Boolean = false
 
     aEliminar?.let { equipo ->
         AlertDialog(
-            onDismissRequest = { aEliminar = null },
-            title = { Text("Eliminar equipo") },
-            text = { Text("¿Eliminar \"${equipo.name}\"? Esta acción no se puede deshacer.") },
+            onDismissRequest = { if (!deactivating) aEliminar = null },
+            title = { Text("Desactivar equipo") },
+            text = { Column {
+                Text("¿Desactivar ${equipo.name}? Se oculta de los equipos activos; no se borran fichas ni historial.")
+                deactivateError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            } },
             confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        container.teamRepository.deleteTeam(equipo.id).collect { }
-                        aEliminar = null
-                        recarga++
+                TextButton(enabled = !deactivating, onClick = {
+                    if (!deactivating) {
+                        deactivating = true; deactivateError = null
+                        scope.launch {
+                            try {
+                                val result = withTimeout(15_000) { container.teamRepository.deleteTeam(equipo.id).first { it !is Result.Loading } }
+                                when (result) {
+                                    is Result.Success -> {
+                                        if (result.data) { aEliminar = null; recarga++; session.refresh() }
+                                        else deactivateError = "No se confirmó la desactivación. Revisa el estado del equipo."
+                                    }
+                                    is Result.Error -> deactivateError = result.message
+                                    else -> deactivateError = "No se confirmó la desactivación."
+                                }
+                            } catch (_: TimeoutCancellationException) {
+                                deactivateError = "No se confirmó en 15 segundos. Puede sincronizarse después; comprueba el estado antes de reintentar."
+                            } catch (e: CancellationException) { throw e }
+                            catch (_: Exception) { deactivateError = "No se confirmó la desactivación. Comprueba la conexión y el estado actual." }
+                            finally { deactivating = false }
+                        }
                     }
-                }) { Text("Eliminar") }
+                }) { Text(if (deactivating) "Desactivando…" else "Desactivar equipo") }
             },
-            dismissButton = { TextButton(onClick = { aEliminar = null }) { Text("Cancelar") } }
+            dismissButton = { TextButton(enabled = !deactivating, onClick = { aEliminar = null }) { Text("Cancelar") } }
         )
     }
 }

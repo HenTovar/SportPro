@@ -104,7 +104,7 @@ fun PlayerAttendanceHistoryScreen(
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = String.format("%.1f%%", uiState.attendancePercentage),
+                        text = if (uiState.isLoading || uiState.error != null || uiState.records.isEmpty()) "—" else String.format("%.1f%%", uiState.attendancePercentage),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -123,33 +123,35 @@ fun PlayerAttendanceHistoryScreen(
                 )
             }
 
-            AttendanceCalendar(uiState.trainings, uiState.records)
+            if (!uiState.isLoading && uiState.error == null) {
+                AttendanceCalendar(uiState.trainings, uiState.records)
 
-            Text("Entrenamientos programados", style = MaterialTheme.typography.titleMedium)
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (uiState.trainings.isEmpty()) {
-                    item { Text("No hay entrenamientos programados") }
-                }
-                items(uiState.trainings, key = { it.id }) { training ->
-                    val record = uiState.records.find { it.trainingId == training.id }
-                    Card(Modifier.fillMaxWidth()) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(training.name)
-                                Text(java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
-                                    .format(java.util.Date(training.date)))
+                Text("Entrenamientos programados", style = MaterialTheme.typography.titleMedium)
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (uiState.trainings.isEmpty()) {
+                        item { Text("No hay entrenamientos programados") }
+                    }
+                    items(uiState.trainings, key = { it.id }) { training ->
+                        val record = uiState.records.find { it.trainingId == training.id }
+                        Card(Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(training.name)
+                                    Text(java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                                        .format(java.util.Date(training.date)))
+                                }
+                                Text(if (training.status == pe.edu.esan.sportpro.data.model.TrainingStatus.CANCELADO)
+                                    "Cancelado" else record?.status?.let { attendanceStatusLabel(it) } ?: "Sin registrar")
                             }
-                            Text(if (training.status == pe.edu.esan.sportpro.data.model.TrainingStatus.CANCELADO)
-                                "Cancelado" else record?.status?.let { attendanceStatusLabel(it) } ?: "Sin registrar")
                         }
                     }
-                }
-                // Keep historical marks visible if their training is no longer available.
-                items(uiState.records.filter { record -> uiState.trainings.none { it.id == record.trainingId } }) { record ->
-                    AttendanceRecordItem(record)
+                    // Keep historical marks visible if their training is no longer available.
+                    items(uiState.records.filter { record -> uiState.trainings.none { it.id == record.trainingId } }) { record ->
+                        AttendanceRecordItem(record)
+                    }
                 }
             }
         }

@@ -592,6 +592,126 @@ service cloud.firestore {
             || getAfter(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.revisionId
               != get(/databases/$(database)/documents/matches/$(matchId)/events/$(request.resource.data.lastEventId)).data.revisionId)));
       allow delete: if false;
+      function preparationTeam(teamId) {
+        let game = get(/databases/$(database)/documents/matches/$(matchId)).data;
+        return teamId in [game.teamA, game.teamB];
+      }
+      function preparationShape(d, teamId) {
+        return d.keys().hasOnly(['teamId','revision','lineupRevision','roster','starters',
+            'substitutes','positions','lastPlayerId','updatedBy','updatedAt'])
+          && d.teamId == teamId && d.revision is int && d.revision >= 1
+          && d.lineupRevision is int && d.lineupRevision >= -1
+          && d.roster is map && d.roster.size() <= 40 && d.starters is list && d.substitutes is list
+          && d.positions is map && d.lastPlayerId is string && d.lastPlayerId.size() > 0
+          && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+      }
+      function preparationRow(row) {
+        return row is map
+          && row.keys().hasOnly(['name','invited','response','respondedBy','respondedAt','recordedByCoach'])
+          && row.name is string && row.name.size() >= 1 && row.name.size() <= 120 && row.invited is bool
+          && row.response in ['PENDING','CONFIRMED','DECLINED']
+          && row.get('recordedByCoach', false) is bool
+          && row.respondedBy is string && (row.respondedAt == null || row.respondedAt is timestamp);
+      }
+      function preparationPending(row) {
+        return preparationRow(row)
+          && row.response == 'PENDING' && row.respondedBy == '' && row.respondedAt == null
+          && row.get('recordedByCoach', false) == false;
+      }
+      function preparationSource(teamId, playerId, row) {
+        let player = get(/databases/$(database)/documents/teams/$(teamId)/players/$(playerId)).data;
+        return preparationPending(row) && row.invited == true
+          && player.get('active', player.get('isActive', false)) == true
+          && player.get('teamId', teamId) == teamId;
+      }
+      function preparationSingleRow(before, next) {
+        return next.roster.keys().hasAll(before.roster.keys())
+          && next.roster.diff(before.roster).affectedKeys().size() == 1
+          && next.roster.diff(before.roster).affectedKeys().hasOnly([next.lastPlayerId])
+          && next.lastPlayerId in next.roster;
+      }
+      function preparationKeepsLineup(before, next) {
+        return next.starters == before.starters && next.substitutes == before.substitutes
+          && next.positions == before.positions && next.lineupRevision == before.lineupRevision;
+      }
+      function preparationInvitation(teamId, before, next) {
+        let row = next.roster[next.lastPlayerId];
+        let old = before.roster.get(next.lastPlayerId, {});
+        return teamStaff(teamId) && preparationSingleRow(before, next)
+          && preparationKeepsLineup(before, next)
+          && preparationPending(row)
+          && ((row.invited == true && (!(next.lastPlayerId in before.roster) || old.invited == false)
+              && preparationSource(teamId, next.lastPlayerId, row))
+            // Withdrawal must remain possible after the source player becomes inactive.
+            || (row.invited == false && next.lastPlayerId in before.roster
+              && old.invited == true && row.name == old.name));
+      }
+      function preparationResponse(teamId, before, next) {
+        let id = next.lastPlayerId;
+        let old = before.roster[id];
+        let row = next.roster[id];
+        return ((assignedPlayer(teamId, id) && row.get('recordedByCoach', false) == false)
+            || (teamStaff(teamId) && row.get('recordedByCoach', false) == true))
+          && preparationSingleRow(before, next)
+          && preparationKeepsLineup(before, next) && old.invited == true
+          && preparationRow(row) && row.invited == old.invited && row.name == old.name
+          && row.diff(old).affectedKeys().hasOnly(['response','respondedBy','respondedAt','recordedByCoach'])
+          && row.response in ['CONFIRMED','DECLINED']
+          && row.respondedBy == request.auth.uid && row.respondedAt == request.time;
+      }
+      function preparationSlot(roster, ids, i) {
+        // Out-of-range optional slots short-circuit. Invalid keys/rows deny, never default to eligible.
+        return i >= ids.size() || (roster[ids[i]].invited == true
+          && roster[ids[i]].response == 'CONFIRMED');
+      }
+      function preparationLineup(teamId, before, next) {
+        let ids = next.starters.concat(next.substitutes);
+        let roster = next.roster;
+        let positions = next.positions;
+        return teamStaff(teamId) && roster == before.roster
+          && next.lastPlayerId == before.lastPlayerId && next.lineupRevision == next.revision
+          && next.starters.size() >= 1 && next.starters.size() <= 11 && next.substitutes.size() <= 12
+          && ids.toSet().size() == ids.size()
+          && positions.keys().hasOnly(ids) && positions.keys().hasAll(ids)
+          // Exact keys above pair every selected player with one permitted position.
+          // Bulk validation is equivalent to repeating the same enum test for all 23 slots.
+          && positions.values().hasOnly(['PORTERO','DEFENSA_CENTRAL','LATERAL_IZQUIERDO',
+            'LATERAL_DERECHO','CENTROCAMPISTA','EXTREMO','DELANTERO'])
+          && preparationSlot(roster, ids, 0) && preparationSlot(roster, ids, 1)
+          && preparationSlot(roster, ids, 2) && preparationSlot(roster, ids, 3)
+          && preparationSlot(roster, ids, 4) && preparationSlot(roster, ids, 5)
+          && preparationSlot(roster, ids, 6) && preparationSlot(roster, ids, 7)
+          && preparationSlot(roster, ids, 8) && preparationSlot(roster, ids, 9)
+          && preparationSlot(roster, ids, 10) && preparationSlot(roster, ids, 11)
+          && preparationSlot(roster, ids, 12) && preparationSlot(roster, ids, 13)
+          && preparationSlot(roster, ids, 14) && preparationSlot(roster, ids, 15)
+          && preparationSlot(roster, ids, 16) && preparationSlot(roster, ids, 17)
+          && preparationSlot(roster, ids, 18) && preparationSlot(roster, ids, 19)
+          && preparationSlot(roster, ids, 20) && preparationSlot(roster, ids, 21)
+          && preparationSlot(roster, ids, 22);
+      }
+      match /squads/{teamId} {
+        // Path authorization also permits a transaction's first read of an absent squad.
+        allow read: if preparationTeam(teamId) && (teamStaff(teamId) || assignedTeam(teamId));
+        allow create: if preparationTeam(teamId) && teamStaff(teamId)
+          && preparationShape(request.resource.data, teamId)
+          && request.resource.data.revision == 1 && request.resource.data.lineupRevision == -1
+          && request.resource.data.roster.keys().size() == 1
+          && request.resource.data.lastPlayerId in request.resource.data.roster
+          && preparationSource(teamId, request.resource.data.lastPlayerId,
+            request.resource.data.roster[request.resource.data.lastPlayerId])
+          && request.resource.data.starters == [] && request.resource.data.substitutes == []
+          && request.resource.data.positions == {};
+        allow update: if preparationTeam(teamId)
+          && preparationShape(request.resource.data, teamId)
+          && request.resource.data.revision == resource.data.revision + 1
+          // Roster equality partitions operations: invitations/replies require exactly one changed row.
+          && (request.resource.data.roster == resource.data.roster
+            ? preparationLineup(teamId, resource.data, request.resource.data)
+            : (preparationInvitation(teamId, resource.data, request.resource.data)
+              || preparationResponse(teamId, resource.data, request.resource.data)));
+        allow delete: if false;
+      }
       match /eventTypes/{typeId} {
         allow read: if matchReader(matchId);
         allow create, update: if matchStaff(matchId) && validType(request.resource.data);
@@ -688,6 +808,93 @@ service cloud.firestore {
     match /exercises/{exerciseId} {
       allow read: if staff();
       allow write: if administrator();
+    }
+    // Insert inside match /databases/{database}/documents alongside existing matches.
+    // Reuses administrator() and assignedPlayer(teamId, playerId) from firestore.rules.
+    match /teams/{teamId}/players/{playerId}/simulatedFees/{period} {
+      function validFeePath() {
+        return teamId.size() > 0 && teamId.size() <= 128
+          && playerId.size() > 0 && playerId.size() <= 128
+          && teamId != '.' && teamId != '..' && playerId != '.' && playerId != '..'
+          && period.matches('[1-9][0-9]{3}-(0[1-9]|1[0-2])');
+      }
+      function validSimulatedFee() {
+        let d = request.resource.data;
+        return validFeePath()
+          && d.keys().hasAll(['teamId','playerId','period','status','simulated','revision',
+            'createdBy','createdAt','updatedBy','updatedAt'])
+          && d.keys().hasOnly(['teamId','playerId','period','status','simulated','revision',
+            'createdBy','createdAt','updatedBy','updatedAt'])
+          && d.teamId == teamId && d.playerId == playerId && d.period == period
+          && d.status in ['PENDING','PAID','EXEMPT'] && d.simulated == true
+          && d.revision is int && d.revision >= 1
+          && d.createdBy is string && d.createdBy.size() > 0 && d.createdAt is timestamp
+          && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+      }
+      allow get: if validFeePath() && (administrator() || assignedPlayer(teamId, playerId));
+      allow list, delete: if false;
+      allow create: if administrator() && validSimulatedFee()
+        && exists(/databases/$(database)/documents/teams/$(teamId))
+        && exists(/databases/$(database)/documents/teams/$(teamId)/players/$(playerId))
+        && request.resource.data.revision == 1
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if administrator() && validSimulatedFee()
+        && exists(/databases/$(database)/documents/teams/$(teamId))
+        && exists(/databases/$(database)/documents/teams/$(teamId)/players/$(playerId))
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status','revision','updatedBy','updatedAt'])
+        && resource.data.revision is int
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+    // Insert inside match /databases/{database}/documents. Existing helpers unchanged.
+    function trialText(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max
+        && value.matches('(?s).*\\S.*')
+        && !value.matches('(?is).*(@|https?://|www[.]|([+]?[0-9][ .()-]*){7,}).*');
+    }
+    function validTrial(d) {
+      return d.keys().hasOnly(['teamId','title','category','position','dateMillis','location',
+          'description','state','createdBy','createdAt','updatedBy','updatedAt','approvedBy','approvedAt','revision'])
+        && d.teamId is string && d.teamId.size() > 0
+        && trialText(d.title,120) && trialText(d.location,160) && trialText(d.description,1500)
+        && d.category in ['SUB_10','SUB_12','SUB_15','SUB_17','PRIMERA','SENIOR']
+        && d.position in ['ANY','PORTERO','DEFENSA_CENTRAL','LATERAL_IZQUIERDO','LATERAL_DERECHO',
+          'CENTROCAMPISTA','EXTREMO','DELANTERO']
+        && d.dateMillis is int && d.dateMillis >= 0 && d.dateMillis % 86400000 == 0
+        && d.state in ['PENDING','PUBLISHED','REJECTED']
+        && d.createdBy is string && d.createdBy.size() > 0 && d.createdAt is timestamp
+        && d.updatedBy == request.auth.uid && d.updatedAt == request.time
+        && d.approvedBy is string && (d.approvedAt == null || d.approvedAt is timestamp)
+        && d.revision is int && d.revision >= 1;
+    }
+    match /openTrials/{trialId} {
+      allow read: if activeUser() && (resource.data.state == 'PUBLISHED'
+        || administrator() || teamStaff(resource.data.teamId));
+      allow create: if activeUser() && validTrial(request.resource.data)
+        && teamStaff(request.resource.data.teamId) && activeTeam(request.resource.data.teamId)
+        && request.resource.data.state == 'PENDING' && request.resource.data.revision == 1
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.approvedBy == '' && request.resource.data.approvedAt == null;
+      allow update: if activeUser() && validTrial(request.resource.data)
+        && request.resource.data.teamId == resource.data.teamId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.revision == resource.data.revision + 1
+        && ((teamStaff(resource.data.teamId) && activeTeam(resource.data.teamId)
+            && request.resource.data.state == 'PENDING'
+            && request.resource.data.approvedBy == '' && request.resource.data.approvedAt == null)
+          || (administrator() && resource.data.state == 'PENDING'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'state','approvedBy','approvedAt','updatedBy','updatedAt','revision'])
+            && ((request.resource.data.state == 'PUBLISHED'
+                && request.resource.data.approvedBy == request.auth.uid && request.resource.data.approvedAt == request.time)
+              || (request.resource.data.state == 'REJECTED'
+                && request.resource.data.approvedBy == '' && request.resource.data.approvedAt == null))));
+      allow delete: if false;
     }
     match /{document=**} {
       allow read, write: if false;

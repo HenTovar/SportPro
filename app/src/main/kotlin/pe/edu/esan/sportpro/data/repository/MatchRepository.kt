@@ -83,7 +83,7 @@ class MatchRepository(private val db: FirebaseFirestore, private val auth: Fireb
             "updatedBy" to uid(),"updatedAt" to FieldValue.serverTimestamp())).await()
     }
     /** New events can queue offline; corrections use a transaction and require connection. */
-    suspend fun add(id: String,type: EventType,minute: Int?,team: String,player: String,note: String) {
+    suspend fun add(id: String,type: EventType,minute: Int?,team: String,player: String,note: String,onQueued: (String)->Unit = {}) {
         val actor=uid();val ref=root(id).collection("events").document();val revision=UUID.randomUUID().toString()
         val data=mapOf("typeId" to type.id,"typeLabel" to type.label,"countsGoal" to type.countsGoal,
             "minute" to minute,"teamId" to team,"player" to player.trim(),"note" to note.trim(),
@@ -92,7 +92,12 @@ class MatchRepository(private val db: FirebaseFirestore, private val auth: Fireb
         val batch=db.batch();batch.set(ref,data)
         batch.update(root(id),mapOf("eventVersion" to FieldValue.increment(1),"lastEventId" to ref.id))
         batch.set(ref.collection("revisions").document(revision),mapOf("actorUid" to actor,"at" to FieldValue.serverTimestamp(),"previousData" to emptyMap<String,Any>(),"eventData" to data))
-        batch.commit().await()
+        // This document ID belongs only to this write. A local pending snapshot is
+        // evidence of queue acceptance, not server approval. Keep observing its task.
+        val listener=ref.addSnapshotListener(MetadataChanges.INCLUDE) { snapshot,_ ->
+            if(snapshot?.exists()==true && snapshot.metadata.hasPendingWrites()) onQueued(ref.id)
+        }
+        try { batch.commit().await() } finally { listener.remove() }
     }
     suspend fun correct(id: String,old: MatchEvent,type: EventType,minute: Int?,team: String,player: String,note: String,voided: Boolean) {
         val actor=uid();val ref=root(id).collection("events").document(old.id);val revision=UUID.randomUUID().toString()

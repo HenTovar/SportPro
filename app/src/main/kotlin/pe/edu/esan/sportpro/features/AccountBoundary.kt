@@ -118,9 +118,7 @@ fun AccountControls() {
     Button(onClick = { confirmation = "Cerrar sesión" }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("account_logout")) {
         Text("Cerrar sesión")
     }
-    OutlinedButton(onClick = { confirmation = "Cambiar de cuenta" }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("account_switch")) {
-        Text("Cambiar de cuenta")
-    }
+    Text("Para cambiar de cuenta, cierra esta sesión e inicia otra.", style = MaterialTheme.typography.bodySmall)
     confirmation?.let { title ->
         AlertDialog(onDismissRequest = { confirmation = null }, title = { Text(title) },
             text = { Text("Se cerrará tu sesión y se borrarán los datos locales y las notificaciones de este dispositivo. Los cambios sin sincronizar se perderán. Después podrás entrar con otra cuenta.") },

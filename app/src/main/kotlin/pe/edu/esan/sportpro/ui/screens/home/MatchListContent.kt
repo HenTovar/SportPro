@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import pe.edu.esan.sportpro.features.ScreenActionPolicy
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -56,7 +57,7 @@ fun MatchListContent(rows: List<LiveMatch>, loading: Boolean, error: String?, st
                     Text(row.name, style = MaterialTheme.typography.titleMedium)
                     Text(if (row.date > 0) SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(row.date)) else "Fecha pendiente")
                     StatusBadge(when (row.status) { "finished" -> "Finalizado"; "in_progress" -> "En curso"; else -> "Programado" }, if (row.status == "in_progress") BadgeTone.Positive else BadgeTone.Neutral)
-                    Button(onClick = { onOpen(row.id) }) { Text("Abrir en vivo") }
+                    Button(onClick = { onOpen(row.id) }) { Text(ScreenActionPolicy.matchActionLabel(row.status)) }
                 }
             }
         }

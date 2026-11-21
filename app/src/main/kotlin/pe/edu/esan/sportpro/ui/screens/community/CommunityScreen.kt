@@ -27,6 +27,8 @@ import pe.edu.esan.sportpro.di.DefaultAppContainer
 import pe.edu.esan.sportpro.ui.navigation.safeBack
 import pe.edu.esan.sportpro.ui.navigation.BindSelectedTeam
 import pe.edu.esan.sportpro.ui.viewmodel.CommunityViewModel
+import pe.edu.esan.sportpro.ui.viewmodel.SubmissionPhase
+import pe.edu.esan.sportpro.ui.viewmodel.TextSubmission
 import pe.edu.esan.sportpro.ui.common.*
 import pe.edu.esan.sportpro.ui.theme.SportProTheme
 import java.text.SimpleDateFormat
@@ -41,7 +43,7 @@ fun CommunityScreen(team:String,nav:NavHostController,embedded:Boolean=false) {
             CommunityViewModel(team,CommunityRepository(FirebaseFirestore.getInstance(),FirebaseAuth.getInstance()),DefaultAppContainer().authRepository) as T
     })
     val state by vm.state.collectAsState();val moderator=RolePolicy.isStaff(state.profile?.role)
-    var text by remember {mutableStateOf("")};var editing by remember {mutableStateOf<CommunityPost?>(null)}
+    val composer=state.composer;val text=composer.text;val editing=composer.postId
     var report by remember {mutableStateOf<CommunityPost?>(null)};var reason by remember {mutableStateOf("")}
     Scaffold(topBar={if(!embedded)TopAppBar(title={Text("Comunidad")},navigationIcon={pe.edu.esan.sportpro.ui.navigation.PrimaryDestinationBackButton(nav)})}) {padding->
         LazyColumn(Modifier.padding(padding),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -53,23 +55,24 @@ fun CommunityScreen(team:String,nav:NavHostController,embedded:Boolean=false) {
             state.error?.let {message->item {MessageNotice(message,true);TextButton(onClick=vm::clearError){Text("Cerrar aviso")}}}
             item {ElevatedCard(elevation=CardDefaults.elevatedCardElevation(defaultElevation=2.dp)) {Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text(if(editing==null)"¿Qué comparte el equipo hoy?" else "Editar mi publicación",style=MaterialTheme.typography.titleMedium)
-                OutlinedTextField(text,{text=it},placeholder={Text("Comparte una buena jugada, una idea o un mensaje de ánimo…")},
+                OutlinedTextField(text,vm::setPostText,enabled=!composer.progress.blocksSend,placeholder={Text("Comparte una buena jugada, una idea o un mensaje de ánimo…")},
                     modifier=Modifier.fillMaxWidth(),minLines=3,maxLines=6,supportingText={Text("${text.length}/1000 · sin datos personales de menores")},isError=text.length>1000)
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.End) {
-                    if(editing!=null)TextButton(onClick={editing=null;text=""},modifier=Modifier.heightIn(min=48.dp)){Text("Cancelar")}
-                    Button(onClick={editing?.let {vm.edit(it,text)} ?: vm.post(text);text="";editing=null},enabled=state.profile!=null&&text.isNotBlank()&&text.length<=1000,modifier=Modifier.heightIn(min=48.dp)) {
-                        Icon(Icons.Default.Send,null);Spacer(Modifier.width(8.dp));Text(if(editing==null)"Publicar" else "Guardar")
+                    if(editing!=null)TextButton(onClick=vm::cancelEdit,enabled=!composer.progress.blocksSend,modifier=Modifier.heightIn(min=48.dp)){Text("Cancelar")}
+                    Button(onClick=vm::publish,enabled=state.profile!=null&&!composer.progress.blocksSend&&text.isNotBlank()&&text.length<=1000,modifier=Modifier.heightIn(min=48.dp)) {
+                        Icon(Icons.Default.Send,null);Spacer(Modifier.width(8.dp));Text(if(composer.progress.phase==SubmissionPhase.SAVING)"Publicando…" else if(composer.progress.phase==SubmissionPhase.UNCERTAIN)"Sin confirmar" else if(editing==null)"Publicar" else "Guardar cambios")
                     }
                 }
+                composer.progress.message?.let {MessageNotice(it,composer.progress.phase==SubmissionPhase.REJECTED)}
             }}}
             if(state.loading)item {LinearProgressIndicator(Modifier.fillMaxWidth())}
             item {SectionHeading("El pulso del equipo","Novedades y conversaciones en tiempo real")}
             if(!state.loading&&state.error==null&&state.posts.isEmpty())item {EmptyState(Icons.Default.Favorite,"Tu equipo tiene mucho por contar","Sé el primero en compartir un mensaje. Evita contactos, datos médicos y ubicaciones de menores.")}
             items(state.posts,key={it.id}) {post->CommunityPostCard(post,post.authorUid==state.profile?.uid,moderator,
-                onOpen={vm.open(post)},onEdit={editing=post;text=post.text},onReport={report=post;reason=""},onModerate={vm.moderate(post)},onReports={vm.reports(post)})}
+                onOpen={vm.open(post)},onEdit={vm.beginEdit(post)},onReport={report=post;reason=""},onModerate={vm.moderate(post)},onReports={vm.reports(post)})}
         }
     }
-    state.selected?.let {post->var comment by remember(post.id){mutableStateOf("")}
+    state.selected?.let {post->val commentDraft=state.comments[post.id] ?: TextSubmission();val comment=commentDraft.text
         AlertDialog(onDismissRequest=vm::close,title={Text("Conversación del equipo")},text={Column(Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text(post.text,style=MaterialTheme.typography.bodyLarge)
             FilledTonalButton(onClick=vm::react,enabled=post.state=="VISIBLE",modifier=Modifier.heightIn(min=48.dp)) {
@@ -81,8 +84,9 @@ fun CommunityScreen(team:String,nav:NavHostController,embedded:Boolean=false) {
                 Text(if(c.state=="HIDDEN")"[Oculto por moderación] ${c.text}" else c.text)
                 if(moderator&&c.state=="VISIBLE")TextButton(onClick={vm.hideComment(c)},modifier=Modifier.heightIn(min=48.dp)){Text("Ocultar comentario")}
             }}}
-            OutlinedTextField(comment,{comment=it},label={Text("Tu comentario")},supportingText={Text("${comment.length}/500")},isError=comment.length>500,modifier=Modifier.fillMaxWidth())
-            Button(onClick={vm.comment(comment);comment=""},enabled=post.state=="VISIBLE"&&comment.isNotBlank()&&comment.length<=500,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Comentar")}
+            OutlinedTextField(comment,{vm.setCommentText(post.id,it)},enabled=!commentDraft.progress.blocksSend,label={Text("Tu comentario")},supportingText={Text("${comment.length}/500")},isError=comment.length>500,modifier=Modifier.fillMaxWidth())
+            Button(onClick={vm.comment(post.id,comment)},enabled=post.state=="VISIBLE"&&!commentDraft.progress.blocksSend&&comment.isNotBlank()&&comment.length<=500,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)){Text(if(commentDraft.progress.phase==SubmissionPhase.SAVING)"Publicando…" else if(commentDraft.progress.phase==SubmissionPhase.UNCERTAIN)"Sin confirmar" else "Comentar")}
+            commentDraft.progress.message?.let {MessageNotice(it,commentDraft.progress.phase==SubmissionPhase.REJECTED)}
         }},confirmButton={TextButton(onClick=vm::close){Text("Cerrar")}})
     }
     report?.let {post->AlertDialog(onDismissRequest={report=null},title={Text("Ayúdanos a cuidar el equipo")},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
